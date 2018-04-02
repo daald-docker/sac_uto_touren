@@ -2,6 +2,7 @@
   "version": "0.0.1",
   "main": "scraper.js",
   "dependencies": {
+    "async": "^2.6.0",
     "cheerio": "latest",
     "request": "latest",
     "sqlite3": "latest"
