@@ -12,7 +12,7 @@ function initDatabase(callback) {
 	var db = new sqlite3.Database("data.sqlite");
 	db.serialize(function() {
 		db.run(`CREATE TABLE IF NOT EXISTS data (
-			id INTEGER,
+			id INTEGER PRIMARY KEY,
 			active INTEGER,
 			lastSeen INTEGER, /* TODO text */
 			date_from TEXT,
@@ -136,7 +136,7 @@ function parseDate1(str, monthLine) {
 // Mi 15. Aug. 2018 1 Tag
 // Fr 30. Mär.  bis Mo 2. Apr. 2018
 function parseDate2(str) {
-	console.log(":", str);
+	//console.log(":", str);
 	assert.notEqual(str, '');
 
 	const result = [];
@@ -234,7 +234,7 @@ function updateDetail(db, tour, callback) {
 	fetchPage(tour.url, function (body) {
 		// Use cheerio to find things in the page with css selectors.
 		var $ = cheerio.load(body);
-console.log("round2");
+		console.log("round2");
 
 		tour.title2 = $("h1").text().trim();
 
@@ -263,7 +263,7 @@ console.log("round2");
 		tour.equipment = kv["Ausrüstung"];	// Bergschuhen, ev. Stöcke, Regen- und Sonnenschutz. Verpflegung aus dem Rucksack
 		tour.subscription_period = kv["Anmeldung"];	// von 23.7.2018 bis 13.8.2018
 
-		console.log(":", tour);
+		//console.log(":", tour);
 		updateRow(db, tour);
 		callback();
 	});
