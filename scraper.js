@@ -7,6 +7,25 @@ var url = require('url');
 var async = require("async");
 var assert = require('assert');
 
+// https://github.com/uxitten/polyfill/blob/master/string.polyfill.js
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/padStart
+if (!String.prototype.padStart) {
+    String.prototype.padStart = function padStart(targetLength,padString) {
+        targetLength = targetLength>>0; //truncate if number or convert non-number to 0;
+        padString = String((typeof padString !== 'undefined' ? padString : ' '));
+        if (this.length > targetLength) {
+            return String(this);
+        }
+        else {
+            targetLength = targetLength-this.length;
+            if (targetLength > padString.length) {
+                padString += padString.repeat(targetLength/padString.length); //append to original to ensure we are longer than needed
+            }
+            return padString.slice(0,targetLength) + String(this);
+        }
+    };
+}
+
 function initDatabase(callback) {
 	// Set up sqlite database.
 	var db = new sqlite3.Database("data.sqlite");
@@ -32,15 +51,20 @@ function initDatabase(callback) {
 			arrival TEXT,
 			text TEXT,
 			equipment TEXT,
-			subscription_period TEXT
+			subscription_period_start TEXT,
+			subscription_period_end TEXT
 		)`);
+
+		db.run("UPDATE data SET active=0");
+
 		callback(db);
 	});
 }
 
 function updateRow(db, tour) {
-	// Insert some data.
-	var statement = db.prepare(`INSERT INTO data(
+	db.serialize(function() {
+		// Insert some data.
+		var statement = db.prepare(`INSERT OR REPLACE INTO data(
 			id,
 			active,
 			lastSeen, /* TODO text */
@@ -61,9 +85,10 @@ function updateRow(db, tour) {
 			arrival,
 			text,
 			equipment,
-			subscription_period
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-	statement.run(
+			subscription_period_start,
+			subscription_period_end
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+		statement.run(
 			tour.id,
 			tour.active,
 			tour.lastSeen,
@@ -84,9 +109,11 @@ function updateRow(db, tour) {
 			tour.arrival,
 			tour.text,
 			tour.equipment,
-			tour.subscription_period
-	);
-	statement.finalize();
+			tour.subscription_period_start,
+			tour.subscription_period_end
+		);
+		statement.finalize();
+	});
 }
 
 function readRows(db) {
@@ -106,31 +133,6 @@ function fetchPage(url, callback) {
 
 		callback(body);
 	});
-}
-
-function parseDate1(str, monthLine) {
-	assert.notEqual(monthLine, '');
-
-	// str format:       'Sa 31. Apr. '
-	// monthLine format: 'April 2016'
-
-	var block1 = str.replace(/[^\dA-Za-zöäü]+/g, ' ').trim().split(' ');
-	var block2 = monthLine.replace(/[^\d.A-Za-zöäü]+/g, ' ').trim().split(' ');
-
-	var weekday = block1[0];
-	var day = block1[1];
-	var month1 = block1[2];
-	var month2 = block2[0];
-	var year = block2[1];
-
-	assert.equal(month1, month2.substr(0, month1.length)); // Make sure Apr == April
-
-	var nMonth = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'].indexOf(month1) + 1;
-	assert(nMonth >= 1);
-	assert(year >= 2000);
-	assert(day >= 1);
-
-	return year + '-' + ('0'+nMonth).slice(-2) + '-' + ('0'+day).slice(-2);
 }
 
 // Mi 15. Aug. 2018 1 Tag
@@ -167,12 +169,34 @@ function parseDate2_int(d, m, y) {
 	assert(y >= 2000);
 	assert(d >= 1);
 
-	return y + '-' + ('0'+nMonth).slice(-2) + '-' + ('0'+d).slice(-2);
+	return y + '-' + nMonth.toString().padStart(2, '0') + '-' + d.toString().padStart(2, '0');
+}
+
+// von 1.12.2017 bis 1.4.2018
+function parseDate3(str) {
+	if (str === undefined) return {}
+	var block1 = str.replace(/[^\dA-Za-zöäü]+/g, ' ').trim().split(' ');
+
+	assert.equal('von', block1[0]);
+	var day1 = block1[1];
+	var month1 = block1[2];
+	var year1 = block1[3];
+	assert.equal('bis', block1[4]);
+	var day2 = block1[5];
+	var month2 = block1[6];
+	var year2 = block1[7];
+	assert.equal(8, block1.length);
+	return {
+		from: year1.toString().padStart(4, '0') + '-' + month1.toString().padStart(2, '0') + '-' + day1.toString().padStart(2, '0'),
+		to: year2.toString().padStart(4, '0') + '-' + month2.toString().padStart(2, '0') + '-' + day2.toString().padStart(2, '0'),
+	}
 }
 
 function run(db) {
 	// Use request to read in pages.
 	fetchPage("https://www.sac-uto.ch/de/touren-und-kurse/tourensuche.html?page=touren&year=&typ=&gruppe=&anlasstyp=&suchstring=", function (body) {
+		console.log("Processing main list");
+
 		// Use cheerio to find things in the page with css selectors.
 		var $ = cheerio.load(body);
 
@@ -214,7 +238,7 @@ function run(db) {
 			tour.id = url.parse(tour.url, true).query.touren_nummer;
 			el = el.next()
 			tour.leiter = el.text(); //leiter: Alfred Lengacher
-			console.log("--", tour);
+			//console.log("--", tour);
 
 			detailTasks.push(function(callback){
 				updateDetail(db, tour, callback);
@@ -234,9 +258,9 @@ function updateDetail(db, tour, callback) {
 	fetchPage(tour.url, function (body) {
 		// Use cheerio to find things in the page with css selectors.
 		var $ = cheerio.load(body);
-		console.log("round2");
+		console.log("Processing details of tour " + tour.id);
 
-		tour.title2 = $("h1").text().trim();
+		tour.title = $("h1").text().trim();
 
 		var kv = {}
 
@@ -261,7 +285,9 @@ function updateDetail(db, tour, callback) {
 		// kv["Karten"]);	// 1134
 		tour.text = kv["Route / Details"];	// Mi: Ab Alp Selamatt (1390 m) über Hinterlucheren - Rügglizimmer - Rüggli zum Gipfel. Retour auf der gleichen Route. Telefonische Anmeldung auch am Vorabend von 18:00 bis 19:00 möglich.
 		tour.equipment = kv["Ausrüstung"];	// Bergschuhen, ev. Stöcke, Regen- und Sonnenschutz. Verpflegung aus dem Rucksack
-		tour.subscription_period = kv["Anmeldung"];	// von 23.7.2018 bis 13.8.2018
+		dd = parseDate3(kv["Anmeldung"])	// von 23.7.2018 bis 13.8.2018
+		tour.subscription_period_start = dd.from;
+		tour.subscription_period_end = dd.to;
 
 		//console.log(":", tour);
 		updateRow(db, tour);
