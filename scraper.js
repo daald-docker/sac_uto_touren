@@ -7,6 +7,9 @@ var url = require('url');
 var async = require("async");
 var assert = require('assert');
 
+var numToursTotal = 0;
+var numToursDone = 0;
+
 // https://github.com/uxitten/polyfill/blob/master/string.polyfill.js
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/padStart
 if (!String.prototype.padStart) {
@@ -240,6 +243,7 @@ function run(db) {
 			tour.leiter = el.text(); //leiter: Alfred Lengacher
 			//console.log("--", tour);
 
+			numToursTotal++;
 			detailTasks.push(function(callback){
 				updateDetail(db, tour, callback);
 			});
@@ -258,7 +262,8 @@ function updateDetail(db, tour, callback) {
 	fetchPage(tour.url, function (body) {
 		// Use cheerio to find things in the page with css selectors.
 		var $ = cheerio.load(body);
-		console.log("Processing details of tour " + tour.id);
+		numToursDone++;
+		console.log("Processing details of tour " + tour.id + ', ' + numToursDone+' of '+numToursTotal);
 
 		tour.title = $("h1").text().trim();
 
