@@ -272,6 +272,9 @@ function updateDetail(db, tour, callback) {
 			var value = el.text().trim();
 			kv[key] = value;
 		});
+		if (kv["Datum"] == undefined) {
+			console.log("Page dump before error:", body);
+		}
 		var dd = parseDate2(kv["Datum"]); // Mi 15. Aug. 2018 1 Tag
 		tour.date_from = dd.from;
 		tour.date_to = dd.to;
