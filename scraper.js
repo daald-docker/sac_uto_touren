@@ -258,12 +258,23 @@ function run(db) {
 	});
 }
 
-function updateDetail(db, tour, callback) {
+function updateDetail(db, tour, callback, retry=1) {
 	fetchPage(tour.url, function (body) {
 		// Use cheerio to find things in the page with css selectors.
 		var $ = cheerio.load(body);
+		if ($("head title").text().trim() == 'Oops, an error occurred!') {
+			console.log("There was an error with tour "+tour.id+": <"+$("head title").text().trim()+"> <"+$(".callout-body").text().trim()+">");
+			if (retry>0) {
+				console.log("retry");
+				updateDetail(db, tour, callback, retry-1)
+			} else {
+				console.log("abort");
+				process.exit(1);
+			}
+			return;
+		}
 		numToursDone++;
-		console.log("Processing details of tour " + tour.id + ', ' + numToursDone+' of '+numToursTotal);
+		console.log("Processing details of tour " + tour.id + ', ' + numToursDone+' of '+numToursTotal + "\t\t" + tour.url);
 
 		tour.title = $("h1").text().trim();
 
