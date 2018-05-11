@@ -262,8 +262,17 @@ function updateDetail(db, tour, callback, retry=1) {
 	fetchPage(tour.url, function (body) {
 		// Use cheerio to find things in the page with css selectors.
 		var $ = cheerio.load(body);
-		if ($("head title").text().trim() == 'Oops, an error occurred!') {
-			console.log("There was an error with tour "+tour.id+": <"+$("head title").text().trim()+"> <"+$(".callout-body").text().trim()+">");
+		var title = $("head title").text().trim();
+		var loaderror = false;
+		if (title == 'Oops, an error occurred!') {
+			console.log("There was an error with tour "+tour.id+": <"+title+"> <"+$(".callout-body").text().trim()+">");
+			loaderror = true;
+		}
+		if (title == '500 Internal Server Error') {
+			console.log("There was an error with tour "+tour.id+": <"+title+"> <"+$("body").text().trim()+">");
+			loaderror = true;
+		}
+		if (loaderror) {
 			if (retry>0) {
 				console.log("retry");
 				updateDetail(db, tour, callback, retry-1)
