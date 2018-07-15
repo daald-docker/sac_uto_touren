@@ -268,7 +268,7 @@ function updateDetail(db, tour, callback, retry=1) {
 			console.log("There was an error with tour "+tour.id+": <"+title+"> <"+$(".callout-body").text().trim()+">");
 			loaderror = true;
 		}
-		if (title == '500 Internal Server Error') {
+		if (title == '500 Internal Server Error' || title == '502 Bad Gateway') {
 			console.log("There was an error with tour "+tour.id+": <"+title+"> <"+$("body").text().trim()+">");
 			loaderror = true;
 		}
