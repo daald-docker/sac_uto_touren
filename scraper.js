@@ -287,7 +287,7 @@ function updateDetail(db, tour, callback, retry=1) {
 		numToursDone++;
 		console.log("Processing details of tour " + tour.id + ', ' + numToursDone+' of '+numToursTotal + "\t\t" + tour.url);
 
-		tour.title = $("h1").text().trim();
+		tour.title = $(".droptours h1").text().trim();
 
 		var kv = {}
 
