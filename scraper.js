@@ -184,15 +184,17 @@ function parseDate3(str) {
 	var day1 = block1[1];
 	var month1 = block1[2];
 	var year1 = block1[3];
+	var res = {
+		from: year1.toString().padStart(4, '0') + '-' + month1.toString().padStart(2, '0') + '-' + day1.toString().padStart(2, '0')
+	}
+	if (block1.length == 4) return res;
 	assert.equal('bis', block1[4]);
 	var day2 = block1[5];
 	var month2 = block1[6];
 	var year2 = block1[7];
+	res.to = year2.toString().padStart(4, '0') + '-' + month2.toString().padStart(2, '0') + '-' + day2.toString().padStart(2, '0')
 	assert.equal(8, block1.length);
-	return {
-		from: year1.toString().padStart(4, '0') + '-' + month1.toString().padStart(2, '0') + '-' + day1.toString().padStart(2, '0'),
-		to: year2.toString().padStart(4, '0') + '-' + month2.toString().padStart(2, '0') + '-' + day2.toString().padStart(2, '0'),
-	}
+	return res
 }
 
 function run(db) {
@@ -313,7 +315,7 @@ function updateDetail(db, tour, callback, retry=1) {
 		// kv["Karten"]);	// 1134
 		tour.text = kv["Route / Details"];	// Mi: Ab Alp Selamatt (1390 m) über Hinterlucheren - Rügglizimmer - Rüggli zum Gipfel. Retour auf der gleichen Route. Telefonische Anmeldung auch am Vorabend von 18:00 bis 19:00 möglich.
 		tour.equipment = kv["Ausrüstung"];	// Bergschuhen, ev. Stöcke, Regen- und Sonnenschutz. Verpflegung aus dem Rucksack
-		dd = parseDate3(kv["Anmeldung"])	// von 23.7.2018 bis 13.8.2018
+		dd = parseDate3(kv["Anmeldung"])	// von 23.7.2018 bis 13.8.2018 [oder ohne bis]
 		tour.subscription_period_start = dd.from;
 		tour.subscription_period_end = dd.to;
 
