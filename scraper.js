@@ -58,6 +58,7 @@ function initDatabase(callback) {
 			subscription_period_end TEXT
 		)`);
 
+		db.run("BEGIN TRANSACTION");
 		db.run("UPDATE data SET active=0");
 
 		callback(db);
@@ -251,11 +252,17 @@ function run(db) {
 			});
 		});
 
+		//detailTasks = detailTasks.slice(0, 5)  // reduce number of pages for testing
+
 		async.parallelLimit(detailTasks, 2, function(){
 			// All tasks are done now
 			//readRows(db);
+			db.serialize(function() {
+				console.log("Committing and closing");
+				db.run("COMMIT");
 
-			db.close();
+				db.close();
+			});
 		});
 	});
 }
