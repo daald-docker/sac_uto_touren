@@ -344,6 +344,12 @@ function updateDetail(db, tour, callback, retry=1) {
 	});
 }
 
+var args = process.argv.slice(2);
+
+if (args.length > 0) {
+	updateDetail(undefined, {url:args[0]}, undefined)
+}
+
 initDatabase(run);
 
 /*
