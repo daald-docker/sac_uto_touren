@@ -129,7 +129,13 @@ function readRows(db) {
 
 function fetchPage(url, callback) {
 	// Use request to read in pages.
-	request(url, function (error, response, body) {
+	var reqObj = {
+		url: url,
+		headers: {
+			'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.183 Safari/537.36 Vivaldi/1.96.1147.36'
+		}
+	}
+	request(reqObj, function (error, response, body) {
 		if (error) {
 			console.log("Error requesting page " + url + ": " + error);
 			return;
