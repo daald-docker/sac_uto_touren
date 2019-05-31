@@ -182,7 +182,10 @@ function parseDate2_int(d, m, y) {
 	return y + '-' + nMonth.toString().padStart(2, '0') + '-' + d.toString().padStart(2, '0');
 }
 
-// format: "Schriftlich, Internet von Mi 22. Mai 2019 bis Sa 25. Mai 2019, Max. TN 15"
+/* formats:
+ * "Schriftlich, Internet von Mi 22. Mai 2019 bis Sa 25. Mai 2019, Max. TN 15"
+ * "Internet von Mi 22. Mai 2019 bis Sa 25. Mai 2019"
+ */
 function parseDate3(str) {
 	if (str === undefined) return {}
 
@@ -205,6 +208,7 @@ function parseDate3(str) {
 	var month2 = block1[8];
 	var year2 = block1[9];
 	res.to = year2.toString().padStart(4, '0') + '-' + month2.toString().padStart(2, '0') + '-' + day2.toString().padStart(2, '0')
+	if (block1.length == 10) return res;
 	assert.equal('Max', block1[10]);
 	assert.equal(13, block1.length);
 	return res
