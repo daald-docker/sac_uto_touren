@@ -185,32 +185,35 @@ function parseDate2_int(d, m, y) {
 /* formats:
  * "Schriftlich, Internet von Mi 22. Mai 2019 bis Sa 25. Mai 2019, Max. TN 15"
  * "Internet von Mi 22. Mai 2019 bis Sa 25. Mai 2019"
+ * "Internet von Do 1. Nov. 2018, Max. TN 4"
  */
 function parseDate3(str) {
 	if (str === undefined) return {}
 
-	var vonIndex = str.indexOf(' von ')
-	assert.notEqual(-1, vonIndex);
-	var str = str.substr(vonIndex + 1)
+	// truncate before
+	var i = str.indexOf(' von ')
+	assert.notEqual(-1, i);
+	str = str.substr(i + 1)
+
+	// truncate after
+	i = str.indexOf(', Max. TN ')
+	if (i > 0) str = str.substr(0, i)
 
 	var block1 = str.replace(/[^\dA-Za-zöäü]+/g, ' ').trim().split(' ');
 
-	assert.equal('von', block1[0]);
 	var day1 = block1[2];
 	var month1 = block1[3];
 	var year1 = block1[4];
 	var res = {
 		from: year1.toString().padStart(4, '0') + '-' + month1.toString().padStart(2, '0') + '-' + day1.toString().padStart(2, '0')
 	}
-	//if (block1.length == 4) return res;
+	if (block1.length == 5) return res;
 	assert.equal('bis', block1[5]);
 	var day2 = block1[7];
 	var month2 = block1[8];
 	var year2 = block1[9];
 	res.to = year2.toString().padStart(4, '0') + '-' + month2.toString().padStart(2, '0') + '-' + day2.toString().padStart(2, '0')
-	if (block1.length == 10) return res;
-	assert.equal('Max', block1[10]);
-	assert.equal(13, block1.length);
+	assert.equal(10, block1.length);
 	return res
 }
 
