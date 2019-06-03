@@ -66,6 +66,10 @@ function initDatabase(callback) {
 }
 
 function updateRow(db, tour) {
+	if (db == undefined) {
+		console.log("REC: ", tour);
+		return;
+	}
 	db.serialize(function() {
 		// Insert some data.
 		var statement = db.prepare(`INSERT OR REPLACE INTO data(
@@ -359,7 +363,8 @@ function updateDetail(db, tour, callback, retry=1) {
 var args = process.argv.slice(2);
 
 if (args.length > 0) {
-	updateDetail(undefined, {url:args[0]}, undefined)
+	updateDetail(undefined, {url:args[0]}, function(){})
+	return
 }
 
 initDatabase(run);
