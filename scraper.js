@@ -186,14 +186,15 @@ function parseDate2_int(d, m, y) {
  * "Schriftlich, Internet von Mi 22. Mai 2019 bis Sa 25. Mai 2019, Max. TN 15"
  * "Internet von Mi 22. Mai 2019 bis Sa 25. Mai 2019"
  * "Internet von Do 1. Nov. 2018, Max. TN 4"
+ * "von So 2. Jun. 2019 bis Fr 28. Jun. 2019, Max. TN 6"
  */
 function parseDate3(str) {
 	if (str === undefined) return {}
 
 	// truncate before
-	var i = str.indexOf(' von ')
+	var i = str.indexOf('von ')
 	assert.notEqual(-1, i);
-	str = str.substr(i + 1)
+	str = str.substr(i)
 
 	// truncate after
 	i = str.indexOf(', Max. TN ')
