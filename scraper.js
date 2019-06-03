@@ -182,6 +182,8 @@ function parseDate2_int(d, m, y) {
 	return y + '-' + nMonth.toString().padStart(2, '0') + '-' + d.toString().padStart(2, '0');
 }
 
+const monthNames = [undefined, 'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
+
 /* formats:
  * "Schriftlich, Internet von Mi 22. Mai 2019 bis Sa 25. Mai 2019, Max. TN 15"
  * "Internet von Mi 22. Mai 2019 bis Sa 25. Mai 2019"
@@ -204,6 +206,7 @@ function parseDate3(str) {
 
 	var day1 = block1[2];
 	var month1 = block1[3];
+	if (monthNames.indexOf(month1) > 0) month1 = monthNames.indexOf(month1);
 	var year1 = block1[4];
 	var res = {
 		from: year1.toString().padStart(4, '0') + '-' + month1.toString().padStart(2, '0') + '-' + day1.toString().padStart(2, '0')
@@ -212,6 +215,7 @@ function parseDate3(str) {
 	assert.equal('bis', block1[5]);
 	var day2 = block1[7];
 	var month2 = block1[8];
+	if (monthNames.indexOf(month2) > 0) month2 = monthNames.indexOf(month2);
 	var year2 = block1[9];
 	res.to = year2.toString().padStart(4, '0') + '-' + month2.toString().padStart(2, '0') + '-' + day2.toString().padStart(2, '0')
 	assert.equal(10, block1.length);
