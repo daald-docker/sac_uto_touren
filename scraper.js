@@ -177,16 +177,16 @@ function parseDate2(str) {
 		};
 }
 
+const monthNames = [undefined, 'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sept', 'Okt', 'Nov', 'Dez']
+
 function parseDate2_int(d, m, y) {
-	var nMonth = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'].indexOf(m) + 1;
+	var nMonth = monthNames.indexOf(m);
 	assert(nMonth >= 1);
 	assert(y >= 2000);
 	assert(d >= 1);
 
 	return y + '-' + nMonth.toString().padStart(2, '0') + '-' + d.toString().padStart(2, '0');
 }
-
-const monthNames = [undefined, 'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
 
 /* formats:
  * "Schriftlich, Internet von Mi 22. Mai 2019 bis Sa 25. Mai 2019, Max. TN 15"
