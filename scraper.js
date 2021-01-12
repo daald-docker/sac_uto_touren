@@ -177,10 +177,10 @@ function parseDate2(str) {
 		};
 }
 
-const monthNames = [undefined, 'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sept', 'Okt', 'Nov', 'Dez']
+const monthNames = [undefined, 'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
 
 function parseDate2_int(d, m, y) {
-	var nMonth = monthNames.indexOf(m);
+	var nMonth = monthNames.indexOf(m.substr(0,3));
 	assert(nMonth >= 1);
 	assert(y >= 2000);
 	assert(d >= 1);
