@@ -228,7 +228,7 @@ function parseDate3(str) {
 
 function run(db) {
 	// Use request to read in pages.
-	fetchPage("https://www.sac-uto.ch/de/touren-und-kurse/tourensuche.html?page=touren&year=&typ=&gruppe=&anlasstyp=&suchstring=", function (body) {
+	fetchPage("https://www.sac-uto.ch/de/touren-und-kurse/tourensuche?page=touren&year=&typ=&gruppe=&anlasstyp=&suchstring=", function (body) {
 		console.log("Processing main list");
 
 		// Use cheerio to find things in the page with css selectors.
@@ -236,7 +236,15 @@ function run(db) {
 
 		var detailTasks = [];
 
-		var elements = $("table.table tr").each(function () {
+		var elements = $("table.table tr")
+
+		if (elements.length == 0) {
+			console.log("No data found in index (search) page");
+			loaderror = true;
+			return;
+		}
+
+		elements.each(function () {
 			var el = $(this).children().first()
 			if (el.attr("colspan") > 1 || el.get(0).tagName != "td") return;
 			var tour = {}
