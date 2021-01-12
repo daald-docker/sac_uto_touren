@@ -210,7 +210,7 @@ function parseDate3(str) {
 
 	var day1 = block1[2];
 	var month1 = block1[3];
-	if (monthNames.indexOf(month1) > 0) month1 = monthNames.indexOf(month1);
+	if (monthNames.indexOf(month1.substr(0,3)) > 0) month1 = monthNames.indexOf(month1.substr(0,3));
 	var year1 = block1[4];
 	var res = {
 		from: year1.toString().padStart(4, '0') + '-' + month1.toString().padStart(2, '0') + '-' + day1.toString().padStart(2, '0')
@@ -219,7 +219,7 @@ function parseDate3(str) {
 	assert.equal('bis', block1[5]);
 	var day2 = block1[7];
 	var month2 = block1[8];
-	if (monthNames.indexOf(month2) > 0) month2 = monthNames.indexOf(month2);
+	if (monthNames.indexOf(month2.substr(0,3)) > 0) month2 = monthNames.indexOf(month2.substr(0,3));
 	var year2 = block1[9];
 	res.to = year2.toString().padStart(4, '0') + '-' + month2.toString().padStart(2, '0') + '-' + day2.toString().padStart(2, '0')
 	assert.equal(10, block1.length);
