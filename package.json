@@ -8,7 +8,9 @@
     "sqlite3": "^5.0.0"
   },
   "engines": {
-    "node": "12.x"
+    "node": "13.1.0",
+    "npm": "6.12.1",
+    "yarn": "1.19.1"
   },
   "keywords": [
     "scraper",
