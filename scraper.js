@@ -226,9 +226,9 @@ function parseDate3(str) {
 	return res
 }
 
-function run(db) {
+function run(db, offset=0) {
 	// Use request to read in pages.
-	fetchPage("https://www.sac-uto.ch/de/touren-und-kurse/tourensuche?page=touren&year=&typ=&gruppe=&anlasstyp=&suchstring=", function (body) {
+	fetchPage("https://www.sac-uto.ch/de/touren-und-kurse/tourensuche?page=touren&year=&typ=&gruppe=&anlasstyp=&suchstring=&offset="+offset, function (body) {
 		console.log("Processing main list");
 
 		// Use cheerio to find things in the page with css selectors.
@@ -292,13 +292,17 @@ function run(db) {
 
 		async.parallelLimit(detailTasks, 2, function(){
 			// All tasks are done now
-			//readRows(db);
-			db.serialize(function() {
-				console.log("Committing and closing");
-				db.run("COMMIT");
+			if (detailTasks.length > 100) {
+				run(db, offset + 200);
+			} else {
+				//readRows(db);
+				db.serialize(function() {
+					console.log("Committing and closing");
+					db.run("COMMIT");
 
-				db.close();
-			});
+					db.close();
+				});
+			}
 		});
 	});
 }
