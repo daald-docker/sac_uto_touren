@@ -228,7 +228,7 @@ function parseDate3(str) {
 
 function run(db, offset=0) {
 	// Use request to read in pages.
-	fetchPage("https://www.sac-uto.ch/de/touren-und-kurse/tourensuche?page=touren&year=&typ=&gruppe=&anlasstyp=&suchstring=&offset="+offset, function (body) {
+	fetchPage("https://sac-uto.ch/de/aktivitaeten/touren-und-kurse/?page=touren&year=&typ=&gruppe=&anlasstyp=&suchstring=&offset="+offset, function (body) {
 		console.log("Processing main list");
 
 		// Use cheerio to find things in the page with css selectors.
@@ -276,7 +276,7 @@ function run(db, offset=0) {
 			//console.log(el.text()); //?
 			el = el.next()
 			tour.title = el.text().trim(); //title: LVS Kurs f&uuml;r Seniorinnen und Senioren
-			tour.url = el.find("a").attr("href"); // https://www.sac-uto.ch/de/touren-und-kurse/tourensuche.html?page=detail&amp;touren_nummer=5947
+			tour.url = el.find("a").attr("href"); // https://sac-uto.ch/de/aktivitaeten/touren-und-kurse/.html?page=detail&amp;touren_nummer=5947
 			tour.id = url.parse(tour.url, true).query.touren_nummer;
 			el = el.next()
 			tour.leiter = el.text(); //leiter: Alfred Lengacher
@@ -382,5 +382,5 @@ if (args.length > 0) {
 initDatabase(run);
 
 /*
-updateDetail(undefined, {url:"https://www.sac-uto.ch/de/touren-und-kurse/tourensuche.html?page=detail&touren_nummer=5898"}, undefined)
+updateDetail(undefined, {url:"https://sac-uto.ch/de/aktivitaeten/touren-und-kurse/.html?page=detail&touren_nummer=5898"}, undefined)
 */
