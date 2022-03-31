@@ -238,10 +238,9 @@ function run(db, offset=0) {
 
 		var elements = $("table.table tr")
 
-		if (elements.length == 0) {
+		if (offset == 0 && elements.length == 0) {
 			console.log("No data found in index (search) page");
-			loaderror = true;
-			return;
+			process.exit(1);
 		}
 
 		elements.each(function () {
