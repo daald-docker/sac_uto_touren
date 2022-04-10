@@ -24,8 +24,8 @@ http.createServer((request, response) => {
 	var parsedUrl = url.parse(request.url)
 	var parsedQuery = querystring.parse(parsedUrl.query)
 	var dbquery = parsedQuery.query
-	if (!dbquery.toLowerCase().startsWith('select ')) {
-		sendErr(response, 'forbidden query');
+	if (!dbquery.toLowerCase().trim().startsWith('select ')) {
+		sendErr(response, 'forbidden query: ' + dbquery);
 		return;
 	}
 	console.log('Query:', dbquery)
