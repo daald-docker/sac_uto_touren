@@ -39,7 +39,6 @@ function initDatabase(callback) {
 			lastSeen INTEGER, /* TODO text */
 			date_from TEXT,
 			date_to TEXT,
-			duration INTEGER,
 			status TEXT,
 			type TEXT,
 			level TEXT,
@@ -57,6 +56,8 @@ function initDatabase(callback) {
 			subscription_period_start TEXT,
 			subscription_period_end TEXT
 		)`);
+		//db.run("ALTER TABLE data DROP COLUMN duration"); // not supported yet
+		db.run("ALTER TABLE data ADD COLUMN extra_info TEXT", function(error){});
 
 		db.run("BEGIN TRANSACTION");
 		db.run("UPDATE data SET active=0");
@@ -70,15 +71,15 @@ function updateRow(db, tour) {
 		console.log("REC: ", tour);
 		return;
 	}
+//console.log("REC: ", tour);
 	db.serialize(function() {
 		// Insert some data.
-		var statement = db.prepare(`INSERT OR REPLACE INTO data(
+		var statement = db.prepare(`INSERT OR REPLACE INTO data (
 			id,
 			active,
 			lastSeen, /* TODO text */
 			date_from,
 			date_to,
-			duration,
 			status,
 			type,
 			level,
@@ -92,6 +93,7 @@ function updateRow(db, tour) {
 			level2,
 			arrival,
 			text,
+			extra_info,
 			equipment,
 			subscription_period_start,
 			subscription_period_end
@@ -102,7 +104,6 @@ function updateRow(db, tour) {
 			tour.lastSeen,
 			tour.date_from,
 			tour.date_to,
-			tour.duration,
 			tour.status,
 			tour.type,
 			tour.level,
@@ -116,18 +117,12 @@ function updateRow(db, tour) {
 			tour.level2,
 			tour.arrival,
 			tour.text,
+			tour.extra_info,
 			tour.equipment,
 			tour.subscription_period_start,
 			tour.subscription_period_end
 		);
 		statement.finalize();
-	});
-}
-
-function readRows(db) {
-	// Read some data.
-	db.each("SELECT rowid AS id, name FROM data", function(err, row) {
-		console.log(row.id + ": " + row.name);
 	});
 }
 
@@ -333,7 +328,8 @@ function updateDetail(db, tour, callback, retry=1) {
 		numToursDone++;
 		console.log("Processing details of tour " + tour.id + ', ' + numToursDone+' of '+numToursTotal + "\t\t" + tour.url);
 
-		tour.title = $(".droptours h1").text().trim();
+		tour.title = $("h2").text().trim();
+		tour.leiter = $(".droptours-address-name").text().trim();
 
 		var kv = {}
 
@@ -360,6 +356,7 @@ function updateDetail(db, tour, callback, retry=1) {
 		tour.arrival = kv["Reiseroute"];	// ÖV
 		// kv["Karten"]);	// 1134
 		tour.text = kv["Route / Details"];	// Mi: Ab Alp Selamatt (1390 m) über Hinterlucheren - Rügglizimmer - Rüggli zum Gipfel. Retour auf der gleichen Route. Telefonische Anmeldung auch am Vorabend von 18:00 bis 19:00 möglich.
+		tour.extra_info = kv["Zusatzinfo"];
 		tour.equipment = kv["Ausrüstung"];	// Bergschuhen, ev. Stöcke, Regen- und Sonnenschutz. Verpflegung aus dem Rucksack
 		dd = parseDate3(kv["Anmeldung"])	// von 23.7.2018 bis 13.8.2018 [oder ohne bis]
 		tour.subscription_period_start = dd.from;
