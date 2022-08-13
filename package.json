@@ -2,15 +2,13 @@
   "version": "0.0.1",
   "main": "scraper.js",
   "dependencies": {
-    "async": "^2.6.3",
-    "cheerio": "^1.0.0-rc.10",
+    "async": "^2.6.4",
+    "cheerio": "^1.0.0-rc.12",
     "request": "^2.88.2",
-    "sqlite3": "^5.0.0"
+    "sqlite3": "^5.0.11"
   },
   "engines": {
-    "node": "13.1.0",
-    "npm": "6.12.1",
-    "yarn": "1.19.1"
+    "node": "18.x"
   },
   "keywords": [
     "scraper",
