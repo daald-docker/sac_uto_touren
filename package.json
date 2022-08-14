@@ -8,7 +8,7 @@
     "sqlite3": "^5.0.11"
   },
   "engines": {
-    "node": "18.x"
+    "node": "16.x"
   },
   "keywords": [
     "scraper",
