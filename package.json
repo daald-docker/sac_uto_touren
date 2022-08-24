@@ -1,6 +1,9 @@
 {
   "version": "0.0.1",
   "main": "scraper.js",
+  "scripts": {
+    "test": "jest"
+  },
   "dependencies": {
     "async": "^2.6.4",
     "cheerio": "^1.0.0-rc.12",
@@ -13,5 +16,8 @@
   "keywords": [
     "scraper",
     "morph"
-  ]
+  ],
+  "devDependencies": {
+    "jest": "^28.1.3"
+  }
 }

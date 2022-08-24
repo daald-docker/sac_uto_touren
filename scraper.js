@@ -6,6 +6,7 @@ var sqlite3 = require("sqlite3").verbose();
 var url = require('url');
 var async = require("async");
 var assert = require('assert');
+var sacdateparser = require('./sacdateparser');
 
 var numToursTotal = 0;
 var numToursDone = 0;
@@ -144,83 +145,6 @@ function fetchPage(url, callback) {
 	});
 }
 
-// Mi 15. Aug. 2018 1 Tag
-// Fr 30. Mär.  bis Mo 2. Apr. 2018
-function parseDate2(str) {
-	//console.log(":", str);
-	assert.notEqual(str, '');
-
-	const result = [];
-
-	var block1 = str.replace(/[^\dA-Za-zöäü]+/g, ' ').trim().split(' ');
-
-	var weekday = block1[0];
-	var day = block1[1];
-	var month = block1[2];
-	var year = block1[3];
-	var duration = block1[4];
-
-	if (block1[3] == 'bis')
-		return {
-			from: parseDate2_int(block1[1], block1[2], block1[7]),
-			to:   parseDate2_int(block1[5], block1[6], block1[7])
-		};
-	else
-		return {
-			from: parseDate2_int(block1[1], block1[2], block1[3]),
-			to:   parseDate2_int(block1[1], block1[2], block1[3])
-		};
-}
-
-const monthNames = [undefined, 'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
-
-function parseDate2_int(d, m, y) {
-	var nMonth = monthNames.indexOf(m.substr(0,3));
-	assert(nMonth >= 1);
-	assert(y >= 2000);
-	assert(d >= 1);
-
-	return y + '-' + nMonth.toString().padStart(2, '0') + '-' + d.toString().padStart(2, '0');
-}
-
-/* formats:
- * "Schriftlich, Internet von Mi 22. Mai 2019 bis Sa 25. Mai 2019, Max. TN 15"
- * "Internet von Mi 22. Mai 2019 bis Sa 25. Mai 2019"
- * "Internet von Do 1. Nov. 2018, Max. TN 4"
- * "von So 2. Jun. 2019 bis Fr 28. Jun. 2019, Max. TN 6"
- */
-function parseDate3(str) {
-	if (str === undefined) return {}
-
-	// truncate before
-	var i = str.indexOf('von ')
-	assert.notEqual(-1, i);
-	str = str.substr(i)
-
-	// truncate after
-	i = str.indexOf(', Max. TN ')
-	if (i > 0) str = str.substr(0, i)
-
-	var block1 = str.replace(/[^\dA-Za-zöäü]+/g, ' ').trim().split(' ');
-
-	var day1 = block1[2];
-	var month1 = block1[3];
-	if (monthNames.indexOf(month1.substr(0,3)) > 0) month1 = monthNames.indexOf(month1.substr(0,3));
-	var year1 = block1[4];
-	var res = {
-		from: year1.toString().padStart(4, '0') + '-' + month1.toString().padStart(2, '0') + '-' + day1.toString().padStart(2, '0')
-	}
-	if (block1.length == 5) return res;
-	assert.equal('bis', block1[5]);
-	var day2 = block1[7];
-	var month2 = block1[8];
-	if (monthNames.indexOf(month2.substr(0,3)) > 0) month2 = monthNames.indexOf(month2.substr(0,3));
-	var year2 = block1[9];
-	res.to = year2.toString().padStart(4, '0') + '-' + month2.toString().padStart(2, '0') + '-' + day2.toString().padStart(2, '0')
-	assert.equal(10, block1.length);
-	return res
-}
-
 function run(db, offset=0) {
 	// Use request to read in pages.
 	fetchPage("https://sac-uto.ch/de/aktivitaeten/touren-und-kurse/?page=touren&year=&typ=&gruppe=&anlasstyp=&suchstring=&offset="+offset, function (body) {
@@ -344,7 +268,7 @@ function updateDetail(db, tour, callback, retry=1) {
 		if (kv["Datum"] == undefined) {
 			console.log("Page dump before error:", body);
 		}
-		var dd = parseDate2(kv["Datum"]); // Mi 15. Aug. 2018 1 Tag
+		var dd = sacdateparser.parseDate2(kv["Datum"]); // Mi 15. Aug. 2018 1 Tag
 		tour.date_from = dd.from;
 		tour.date_to = dd.to;
 		tour.group = kv["Gruppe"];	// Senioren
@@ -358,7 +282,7 @@ function updateDetail(db, tour, callback, retry=1) {
 		tour.text = kv["Route / Details"];	// Mi: Ab Alp Selamatt (1390 m) über Hinterlucheren - Rügglizimmer - Rüggli zum Gipfel. Retour auf der gleichen Route. Telefonische Anmeldung auch am Vorabend von 18:00 bis 19:00 möglich.
 		tour.extra_info = kv["Zusatzinfo"];
 		tour.equipment = kv["Ausrüstung"];	// Bergschuhen, ev. Stöcke, Regen- und Sonnenschutz. Verpflegung aus dem Rucksack
-		dd = parseDate3(kv["Anmeldung"])	// von 23.7.2018 bis 13.8.2018 [oder ohne bis]
+		dd = sacdateparser.parseDate3(kv["Anmeldung"])	// von 23.7.2018 bis 13.8.2018 [oder ohne bis]
 		tour.subscription_period_start = dd.from;
 		tour.subscription_period_end = dd.to;
 
