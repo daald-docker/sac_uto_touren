@@ -18,23 +18,34 @@ function parseDate2(str) {
 
 	if (block1[3] == 'bis')
 		return {
-			from: parseDate2_int(block1[1], block1[2], block1[7]),
-			to:   parseDate2_int(block1[5], block1[6], block1[7])
+			from: parseDate2_int(block1[1], block1[2], block1[7], str),
+			to:   parseDate2_int(block1[5], block1[6], block1[7], str)
 		};
 	else
 		return {
-			from: parseDate2_int(block1[1], block1[2], block1[3]),
-			to:   parseDate2_int(block1[1], block1[2], block1[3])
+			from: parseDate2_int(block1[1], block1[2], block1[3], str),
+			to:   parseDate2_int(block1[1], block1[2], block1[3], str)
 		};
 }
 
 const monthNames = [undefined, 'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
+function parseMonth(str) {
+	var nMonth;
+	if (!isNaN(+str))
+		nMonth = +str;
+	else if (str == "MÃ¤rz") // charset error in page around dec 2024
+		nMonth = 3;
+	else
+		nMonth = monthNames.indexOf(str.substr(0,3));
+	assert(nMonth >= 1 && nMonth <= 12);
+	return nMonth;
+}
 
-function parseDate2_int(d, m, y) {
-	var nMonth = monthNames.indexOf(m.substr(0,3));
+function parseDate2_int(d, m, y, str) {
+	var nMonth = parseMonth(m);
 	assert(nMonth >= 1);
-	assert(y >= 2000);
-	assert(d >= 1);
+	assert(y >= 2000, "Could not parse date in "+str + " ("+d+","+m+","+y+")");
+	assert(d >= 1, "Could not parse date in "+str + " ("+d+","+m+","+y+")");
 
 	return y + '-' + nMonth.toString().padStart(2, '0') + '-' + d.toString().padStart(2, '0');
 }
@@ -46,8 +57,7 @@ function parseDate3_datestr(str, token) {
 	assert.equal(5, block1.length, "bogus number of elements in date '" + str + "'");
 	var weekday1 = block1[1];
 	var day1 = block1[2];
-	var month1 = block1[3];
-	if (monthNames.indexOf(month1.substr(0,3)) > 0) month1 = monthNames.indexOf(month1.substr(0,3));
+	var month1 = parseMonth(block1[3]);
 	var year1 = block1[4];
 	return year1.toString().padStart(4, '0') + '-' + month1.toString().padStart(2, '0') + '-' + day1.toString().padStart(2, '0')
 }
@@ -55,6 +65,7 @@ function parseDate3_datestr(str, token) {
 /* formats:
  * "Schriftlich, Internet von Mi 22. Mai 2019 bis Sa 25. Mai 2019, Max. TN 15"
  * "Internet von Mi 22. Mai 2019 bis Sa 25. Mai 2019"
+ * "von Mi 1. Jan. 2025 bis So 2. März 2025"
  * "Internet von Do 1. Nov. 2018, Max. TN 4"
  * "von So 2. Jun. 2019 bis Fr 28. Jun. 2019, Max. TN 6"
  * bis Fr 16. Sept. 2022, Max. TN 8
