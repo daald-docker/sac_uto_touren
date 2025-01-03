@@ -147,8 +147,9 @@ function fetchPage(url, callback) {
 
 function run(db, offset=0) {
 	// Use request to read in pages.
-	fetchPage("https://sac-uto.ch/de/aktivitaeten/touren-und-kurse/?page=touren&year=&typ=&gruppe=&anlasstyp=&suchstring=&offset="+offset, function (body) {
-		console.log("Processing main list");
+	var thisurl = "https://sac-uto.ch/de/aktivitaeten/touren-und-kurse/?page=touren&year=&typ=&gruppe=&anlasstyp=&suchstring=&offset=" + offset;
+	fetchPage(thisurl, function (body) {
+		console.log("Processing main list " + thisurl);
 
 		// Use cheerio to find things in the page with css selectors.
 		var $ = cheerio.load(body);
@@ -210,8 +211,8 @@ function run(db, offset=0) {
 
 		async.parallelLimit(detailTasks, 2, function(){
 			// All tasks are done now
-			if (detailTasks.length > 100) {
-				run(db, offset + 200);
+			if (detailTasks.length > 40) {
+				run(db, offset + 50);
 			} else {
 				//readRows(db);
 				db.serialize(function() {
