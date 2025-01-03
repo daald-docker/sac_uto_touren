@@ -269,6 +269,20 @@ function updateDetail(db, tour, callback, retry=1) {
 		if (kv["Datum"] == undefined) {
 			console.log("Page dump before error:", body);
 		}
+
+		// Could not parse date in "Do 0.   1 Tag (0,1,Tag)"
+		if (kv["Datum"].startsWith("Do 0.")) {
+			// means "not found" or is a race condition on server
+			if (retry>0) {
+				console.log("retry because weird start date '"+kv["Datum"]);
+				updateDetail(db, tour, callback, retry-1)
+			} else {
+				console.log("Skipping tour with weird start date '"+kv["Datum"]+"': "+tour.url);
+				callback();
+			}
+			return;
+		}
+
 		var dd = sacdateparser.parseDate2(kv["Datum"]); // Mi 15. Aug. 2018 1 Tag
 		tour.date_from = dd.from;
 		tour.date_to = dd.to;
