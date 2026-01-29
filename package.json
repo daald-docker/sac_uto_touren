@@ -8,10 +8,10 @@
     "async": "^3.2.6",
     "cheerio": "1.0.0-rc.12",
     "request": "^2.88.2",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.0.2"
   },
   "engines": {
-    "node": "16.x"
+    "node": "v22.7"
   },
   "keywords": [
     "scraper",
