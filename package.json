@@ -11,7 +11,7 @@
     "sqlite3": "^5.0.2"
   },
   "engines": {
-    "node": "v22.7.0"
+    "node": "16.x"
   },
   "keywords": [
     "scraper",
