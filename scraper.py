@@ -149,17 +149,17 @@ def update_detail(db: sqlite3.Connection | None, tour: dict, retry: int = 1) -> 
 
     # Fehlerbehandlung
     title_tag = soup.find("title")
-    page_title = title_tag.get_text(strip=True) if title_tag else ""
+    page_title = title_tag.get_text().strip() if title_tag else ""
     load_error = False
 
     if page_title == "Oops, an error occurred!":
         callout = soup.select_one(".callout-body")
-        msg = callout.get_text(strip=True) if callout else ""
+        msg = callout.get_text().strip() if callout else ""
         print(f"Fehler bei Tour {tour.get('id')}: <{page_title}> <{msg}>")
         load_error = True
 
     if page_title in ("500 Internal Server Error", "502 Bad Gateway", "504 Gateway Time-out"):
-        body_text = soup.get_text(strip=True)[:200]
+        body_text = soup.get_text().strip()[:200]
         print(f"Fehler bei Tour {tour.get('id')}: <{page_title}> <{body_text}>")
         load_error = True
 
@@ -178,9 +178,9 @@ def update_detail(db: sqlite3.Connection | None, tour: dict, retry: int = 1) -> 
 
     # Titel und Leiter
     h2 = soup.find("h2")
-    tour["title"] = h2.get_text(strip=True) if h2 else tour.get("title", "")
+    tour["title"] = h2.get_text().strip() if h2 else tour.get("title", "")
     leiter_el = soup.select_one(".droptours-address-name")
-    tour["leiter"] = leiter_el.get_text(strip=True) if leiter_el else ""
+    tour["leiter"] = leiter_el.get_text().strip() if leiter_el else ""
 
     # Key-Value-Tabelle
     kv: dict[str, str] = {}
@@ -190,8 +190,8 @@ def update_detail(db: sqlite3.Connection | None, tour: dict, retry: int = 1) -> 
             continue
         if cells[0].get("colspan"):
             continue
-        key = cells[0].get_text(strip=True)
-        value = cells[1].get_text(strip=True)
+        key = cells[0].get_text().strip()
+        value = cells[1].get_text().strip()
         kv[key] = value
 
     if "Datum" not in kv:
@@ -278,7 +278,7 @@ def run(db: sqlite3.Connection, offset: int = 0) -> None:
         tour["lastSeen"] = int(time.time() * 1000)
 
         # Spalte 0: Datum / Status
-        tour["rawDate"] = first.get_text(strip=True)
+        tour["rawDate"] = first.get_text().strip()
         classes = first.get("class", [])
         if "status_3" in classes:
             tour["status"] = "full"
@@ -295,14 +295,14 @@ def run(db: sqlite3.Connection, offset: int = 0) -> None:
         if len(tds) < 8:
             continue
 
-        tour["type"] = tds[1].get_text(strip=True)
+        tour["type"] = tds[1].get_text().strip()
         # tds[2] = Icon (übersprungen)
-        tour["level"] = tds[3].get_text(strip=True)
-        tour["rawDuration"] = tds[4].get_text(strip=True)
-        tour["group"] = tds[5].get_text(strip=True)
+        tour["level"] = tds[3].get_text().strip()
+        tour["rawDuration"] = tds[4].get_text().strip()
+        tour["group"] = tds[5].get_text().strip()
         # tds[6] = ? (übersprungen)
         title_td = tds[7]
-        tour["title"] = title_td.get_text(strip=True)
+        tour["title"] = title_td.get_text().strip()
 
         link = title_td.find("a")
         if link:
@@ -316,7 +316,7 @@ def run(db: sqlite3.Connection, offset: int = 0) -> None:
         tour["id"] = qs.get("touren_nummer", [None])[0]
 
         if len(tds) > 8:
-            tour["leiter"] = tds[8].get_text(strip=True)
+            tour["leiter"] = tds[8].get_text().strip()
         else:
             tour["leiter"] = ""
 
