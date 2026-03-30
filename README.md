@@ -1,10 +1,19 @@
-# SAC UTO Tour List – Python Scraper
+# SAC Uto Tour List – Python Scraper
+
+This is a scraper that runs on [Morph](https://morph.io). To get started [see the documentation](https://morph.io/documentation)
+
+-> [https://morph.io/daald-docker/sac_uto_touren](https://morph.io/daald-docker/sac_uto_touren)
+
+The original web page is awful, if you have to decide which tours you want to subscribe and when. I once wrote an alternative frontend, but I never finished and it doesn't work anymore with the current data structure.
+
+Let me know if you are using this data for something.
+
+
+
+## Description
 
 A scraper for the tour list of [SAC Section Uto](https://sac-uto.ch/de/aktivitaeten/touren-und-kurse/).
 Scraped data is stored in a local SQLite database.
-
-> The original website is awful when you're trying to decide which tours to sign up for
-> and when the registration deadlines are. This scraper makes the data machine-readable.
 
 This is a Python port of the original Node.js scraper at
 [daald-docker/sac_uto_touren](https://github.com/daald-docker/sac_uto_touren). For maintainability,
