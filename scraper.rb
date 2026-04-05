@@ -8,5 +8,6 @@ Dir.chdir("scraper-py") do
   #system("git branch -a")
   #system("git remote -v")
   system("/app/.local/bin/pip install -r requirements.txt")
+  system("python3 scraper.py")
   #system("find / -name pip -executable -type f")
 end
