@@ -1,9 +1,9 @@
 """
-scraper.py – Python-Äquivalent von scraper.js
-Scraper für SAC UTO Touren (https://sac-uto.ch)
-Ursprünglich für morph.io entwickelt.
+scraper.py – Python equivalent of scraper.js
+Scraper for SAC UTO tours (https://sac-uto.ch)
+Originally developed for morph.io.
 
-Abhängigkeiten:
+Dependencies:
     pip install requests beautifulsoup4
 """
 
@@ -19,7 +19,7 @@ from bs4 import BeautifulSoup
 import sacdateparser
 
 # ---------------------------------------------------------------------------
-# Globale Zähler
+# Global counters
 # ---------------------------------------------------------------------------
 num_tours_total = 0
 num_tours_done = 0
@@ -32,11 +32,11 @@ HEADERS = {
 }
 
 # ---------------------------------------------------------------------------
-# Datenbank
+# Database
 # ---------------------------------------------------------------------------
 
 def init_database() -> sqlite3.Connection:
-    """Richtet die SQLite-Datenbank ein und gibt die Verbindung zurück."""
+    """Sets up the SQLite database and returns the connection."""
     db = sqlite3.connect("data.sqlite", check_same_thread=False)
     cur = db.cursor()
     cur.execute("""
@@ -65,19 +65,17 @@ def init_database() -> sqlite3.Connection:
             extra_info                TEXT
         )
     """)
-    # Spalte extra_info nachträglich hinzufügen, falls sie fehlt (für bestehende DBs)
+    # Add extra_info column retroactively if missing (for existing DBs)
     try:
         cur.execute("ALTER TABLE data ADD COLUMN extra_info TEXT")
     except sqlite3.OperationalError:
-        pass  # Spalte existiert bereits
+        pass  # Column already exists
 
-    db.execute("UPDATE data SET active=0")
-    db.commit()
-    return db
+    return db, cur
 
 
 def update_row(db: sqlite3.Connection | None, tour: dict) -> None:
-    """Schreibt einen Tour-Datensatz in die Datenbank (oder gibt ihn auf der Konsole aus)."""
+    """Writes a tour record to the database (or prints it to the console)."""
     if db is None:
         print("REC:", tour)
         return
@@ -112,42 +110,42 @@ def update_row(db: sqlite3.Connection | None, tour: dict) -> None:
 # ---------------------------------------------------------------------------
 
 def fetch_page(url: str, retries: int = 3) -> str | None:
-    """Lädt eine Seite und gibt den HTML-Body zurück."""
+    """Fetches a page and returns the HTML body."""
     for attempt in range(retries):
         try:
             resp = requests.get(url, headers=HEADERS, timeout=30)
             resp.raise_for_status()
             return resp.text
         except requests.RequestException as e:
-            print(f"Fehler beim Laden von {url} (Versuch {attempt + 1}): {e}")
+            print(f"Error fetching {url} (attempt {attempt + 1}): {e}")
             time.sleep(2 ** attempt)
     return None
 
 
 # ---------------------------------------------------------------------------
-# Detailseite
+# Detail page
 # ---------------------------------------------------------------------------
 
-def update_detail(db: sqlite3.Connection | None, tour: dict, retry: int = 1) -> bool:
+def update_detail(db: sqlite3.Connection, tour: dict, retry: int = 1) -> bool:
     """
-    Lädt die Detailseite einer Tour, extrahiert alle Felder
-    und schreibt den Datensatz in die DB.
-    Gibt True bei Erfolg zurück.
+    Fetches the detail page of a tour, extracts all fields,
+    and writes the record to the DB.
+    Returns True on success.
     """
     global num_tours_done
 
     body = fetch_page(tour["url"])
     if body is None:
-        print(f"Konnte Seite nicht laden: {tour['url']}")
+        print(f"Could not load page: {tour['url']}")
         if retry > 0:
-            print("Wiederholung …")
+            print("Retrying ...")
             return update_detail(db, tour, retry - 1)
-        print("Abbruch.")
+        print("Aborting.")
         sys.exit(1)
 
     soup = BeautifulSoup(body, "html.parser")
 
-    # Fehlerbehandlung
+    # Error handling
     title_tag = soup.find("title")
     page_title = title_tag.get_text().strip() if title_tag else ""
     load_error = False
@@ -155,34 +153,34 @@ def update_detail(db: sqlite3.Connection | None, tour: dict, retry: int = 1) -> 
     if page_title == "Oops, an error occurred!":
         callout = soup.select_one(".callout-body")
         msg = callout.get_text().strip() if callout else ""
-        print(f"Fehler bei Tour {tour.get('id')}: <{page_title}> <{msg}>")
+        print(f"Error on tour {tour.get('id')}: <{page_title}> <{msg}>")
         load_error = True
 
     if page_title in ("500 Internal Server Error", "502 Bad Gateway", "504 Gateway Time-out"):
         body_text = soup.get_text().strip()[:200]
-        print(f"Fehler bei Tour {tour.get('id')}: <{page_title}> <{body_text}>")
+        print(f"Error on tour {tour.get('id')}: <{page_title}> <{body_text}>")
         load_error = True
 
     if load_error:
         if retry > 0:
-            print("Wiederholung …")
+            print("Retrying ...")
             return update_detail(db, tour, retry - 1)
-        print("Abbruch.")
+        print("Aborting.")
         sys.exit(1)
 
     num_tours_done += 1
     print(
-        f"Verarbeite Tour {tour.get('id')}, "
-        f"{num_tours_done} von {num_tours_total}\t\t{tour['url']}"
+        f"Processing tour {tour.get('id')}, "
+        f"{num_tours_done} of {num_tours_total}\t\t{tour['url']}"
     )
 
-    # Titel und Leiter
+    # Title and leader
     h2 = soup.find("h2")
     tour["title"] = h2.get_text().strip() if h2 else tour.get("title", "")
     leiter_el = soup.select_one(".droptours-address-name")
     tour["leiter"] = leiter_el.get_text().strip() if leiter_el else ""
 
-    # Key-Value-Tabelle
+    # Key-value table
     kv: dict[str, str] = {}
     for row in soup.select("table#droptours-detail tr"):
         cells = row.find_all("td")
@@ -195,16 +193,16 @@ def update_detail(db: sqlite3.Connection | None, tour: dict, retry: int = 1) -> 
         kv[key] = value
 
     if "Datum" not in kv:
-        print("Seiten-Dump vor Fehler:", body[:500])
+        print("Page dump before error:", body[:500])
 
     datum = kv.get("Datum", "")
 
-    # Sonderfall: Server-Fehler mit Datum "Do 0."
+    # Special case: server error with date "Do 0."
     if datum.startswith("Do 0."):
         if retry > 0:
-            print(f"Wiederholung wegen merkwürdigem Startdatum '{datum}'")
+            print(f"Retrying due to unexpected start date '{datum}'")
             return update_detail(db, tour, retry - 1)
-        print(f"Tour mit merkwürdigem Startdatum übersprungen '{datum}': {tour['url']}")
+        print(f"Skipping tour with unexpected start date '{datum}': {tour['url']}")
         return False
 
     dd = sacdateparser.parse_date2(datum)
@@ -230,13 +228,13 @@ def update_detail(db: sqlite3.Connection | None, tour: dict, retry: int = 1) -> 
 
 
 # ---------------------------------------------------------------------------
-# Hauptseite (Listenansicht) – paginiert
+# Main page (list view) – paginated
 # ---------------------------------------------------------------------------
 
 def run(db: sqlite3.Connection, offset: int = 0) -> None:
     """
-    Verarbeitet die paginierte Tourenliste und ruft für jeden Eintrag
-    die Detailseite ab.
+    Processes the paginated tour list and fetches the detail page
+    for each entry.
     """
     global num_tours_total
 
@@ -247,16 +245,16 @@ def run(db: sqlite3.Connection, offset: int = 0) -> None:
 
     body = fetch_page(list_url)
     if body is None:
-        print(f"Konnte Hauptseite nicht laden: {list_url}")
+        print(f"Could not load main page: {list_url}")
         sys.exit(1)
 
-    print(f"Verarbeite Hauptliste {list_url}")
+    print(f"Processing main list {list_url}")
     soup = BeautifulSoup(body, "html.parser")
 
     rows = soup.select("table.table tr")
 
     if offset == 0 and not rows:
-        print("Keine Daten auf der Indexseite gefunden.")
+        print("No data found on index page.")
         sys.exit(1)
 
     detail_tours: list[dict] = []
@@ -267,7 +265,7 @@ def run(db: sqlite3.Connection, offset: int = 0) -> None:
             continue
         first = cells[0]
 
-        # Überspringe Kopfzeilen (th) oder colspan-Zellen
+        # Skip header rows (th) or colspan cells
         if first.name != "td":
             continue
         if first.get("colspan"):
@@ -277,7 +275,7 @@ def run(db: sqlite3.Connection, offset: int = 0) -> None:
         tour["active"] = 1
         tour["lastSeen"] = int(time.time() * 1000)
 
-        # Spalte 0: Datum / Status
+        # Column 0: date / status
         tour["rawDate"] = first.get_text().strip()
         classes = first.get("class", [])
         if "status_3" in classes:
@@ -296,11 +294,11 @@ def run(db: sqlite3.Connection, offset: int = 0) -> None:
             continue
 
         tour["type"] = tds[1].get_text().strip()
-        # tds[2] = Icon (übersprungen)
+        # tds[2] = icon (skipped)
         tour["level"] = tds[3].get_text().strip()
         tour["rawDuration"] = tds[4].get_text().strip()
         tour["group"] = tds[5].get_text().strip()
-        # tds[6] = ? (übersprungen)
+        # tds[6] = ? (skipped)
         title_td = tds[7]
         tour["title"] = title_td.get_text().strip()
 
@@ -310,7 +308,7 @@ def run(db: sqlite3.Connection, offset: int = 0) -> None:
         else:
             tour["url"] = ""
 
-        # Tour-ID aus Query-String
+        # Tour ID from query string
         parsed = urlparse(tour["url"])
         qs = parse_qs(parsed.query)
         tour["id"] = qs.get("touren_nummer", [None])[0]
@@ -323,7 +321,7 @@ def run(db: sqlite3.Connection, offset: int = 0) -> None:
         num_tours_total += 1
         detail_tours.append(tour)
 
-    # Detailseiten parallel abrufen (max. 2 gleichzeitig, wie im Original)
+    # Fetch detail pages in parallel (max. 2 at a time, as in the original)
     with ThreadPoolExecutor(max_workers=2) as executor:
         futures = {
             executor.submit(update_detail, db, t): t
@@ -334,29 +332,31 @@ def run(db: sqlite3.Connection, offset: int = 0) -> None:
                 future.result()
             except Exception as exc:
                 t = futures[future]
-                print(f"Fehler bei Tour {t.get('id')}: {exc}")
+                print(f"Error on tour {t.get('id')}: {exc}")
 
-    # Commit nach jeder Seite
-    db.commit()
-
-    # Nächste Seite laden, wenn genug Ergebnisse
+    # Load next page if enough results
     if len(detail_tours) > 40:
         run(db, offset + 50)
-    else:
-        print("Commit und Datenbankverbindung schliessen.")
-        db.close()
-
 
 # ---------------------------------------------------------------------------
-# Einstiegspunkt
+# Entry point
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     args = sys.argv[1:]
 
     if args:
-        # Einzelne Tour-URL direkt verarbeiten (wie im Original)
+        # Process a single tour URL directly (as in the original)
         update_detail(None, {"url": args[0]})
     else:
-        database = init_database()
-        run(database)
+        db, cur = init_database()
+
+    # Mark all active records as inactive before re-scraping
+    cur.execute("UPDATE data SET active=0")
+
+    run(db)
+
+    # Commit after each page
+    print("Committing and closing database connection.")
+    db.commit()
+    db.close()

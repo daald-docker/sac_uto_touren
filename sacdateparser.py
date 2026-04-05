@@ -1,6 +1,6 @@
 """
-sacdateparser.py – Python-Äquivalent von sacdateparser.js
-Parst deutschsprachige Datumsstrings des SAC-UTO-Tourenportals.
+sacdateparser.py – Python equivalent of sacdateparser.js
+Parses German-language date strings from the SAC-UTO tour portal.
 """
 
 import re
@@ -10,7 +10,7 @@ MONTH_NAMES = [None, 'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun',
 
 
 def parse_month(s: str) -> int:
-    """Wandelt einen Monatsnamen oder eine Monatszahl in eine Ganzzahl (1–12) um."""
+    """Converts a month name or month number to an integer (1–12)."""
     s = s.strip()
     try:
         n = int(s)
@@ -18,44 +18,44 @@ def parse_month(s: str) -> int:
         return n
     except ValueError:
         pass
-    if s == "MÃ¤rz":  # Charset-Fehler in Seite um Dez 2024
+    if s == "MÃ¤rz":  # Charset error on page around Dec 2024
         return 3
-    # Nur die ersten 3 Zeichen vergleichen (z. B. "Sept" → "Sep")
+    # Compare only the first 3 characters (e.g. "Sept" → "Sep")
     prefix = s[:3]
     try:
         n = MONTH_NAMES.index(prefix)
     except ValueError:
-        raise ValueError(f"Unbekannter Monatsname: {s!r}")
+        raise ValueError(f"Unknown month name: {s}")
     assert 1 <= n <= 12
     return n
 
 
 def _parse_date2_int(d: str, m: str, y: str, original: str) -> str:
-    """Baut einen ISO-Datumsstring (YYYY-MM-DD) aus Tag, Monat, Jahr."""
+    """Builds an ISO date string (YYYY-MM-DD) from day, month, year."""
     n_month = parse_month(m)
     y_int = int(y)
     d_int = int(d)
-    assert y_int >= 2000, f"Could not parse date in {original!r} ({d},{m},{y})"
-    assert d_int >= 1,    f"Could not parse date in {original!r} ({d},{m},{y})"
+    assert y_int >= 2000, f"Could not parse date in {original} ({d},{m},{y})"
+    assert d_int >= 1,    f"Could not parse date in {original} ({d},{m},{y})"
     return f"{y_int}-{n_month:02d}-{d_int:02d}"
 
 
 def parse_date2(s: str) -> dict:
     """
-    Parst Datumsstrings der Form:
+    Parses date strings of the form:
       "Mi 15. Aug. 2018 1 Tag"
       "Fr 30. Mär.  bis Mo 2. Apr. 2018"
 
-    Gibt {'from': 'YYYY-MM-DD', 'to': 'YYYY-MM-DD'} zurück.
+    Returns {'from': 'YYYY-MM-DD', 'to': 'YYYY-MM-DD'}.
     """
-    assert s != '', "parse_date2: leerer String"
+    assert s != '', "parse_date2: empty string"
 
-    # Alle Nicht-Wort-Zeichen (außer ö/ä/ü) durch Leerzeichen ersetzen, dann splitten
+    # Replace all non-word characters (except ö/ä/ü) with spaces, then split
     block = re.sub(r'[^\dA-Za-zöäü]+', ' ', s).strip().split()
 
-    # block[3] == 'bis'  →  Datumsbereich
-    # z. B. "Fr 30. Mär.  bis Mo 2. Apr. 2018"
-    # nach Bereinigung: ['Fr', '30', 'Mär', 'bis', 'Mo', '2', 'Apr', '2018']
+    # block[3] == 'bis'  →  date range
+    # e.g. "Fr 30. Mär.  bis Mo 2. Apr. 2018"
+    # after cleaning: ['Fr', '30', 'Mär', 'bis', 'Mo', '2', 'Apr', '2018']
     if block[3] == 'bis':
         return {
             'from': _parse_date2_int(block[1], block[2], block[7], s),
@@ -70,12 +70,12 @@ def parse_date2(s: str) -> dict:
 
 def _parse_date3_datestr(s: str, token: str) -> str:
     """
-    Parst einen Teilstring der Form "von Mi 22. Mai 2019" oder "bis Sa 25. Mai 2019".
+    Parses a substring of the form "von Mi 22. Mai 2019" or "bis Sa 25. Mai 2019".
     """
-    # Alle Kommas, Punkte und mehrfache Leerzeichen durch ein Leerzeichen ersetzen
+    # Replace all commas, dots and multiple spaces with a single space
     block = re.sub(r'[,.\s]+', ' ', s).strip().split()
     assert block[0] == token, f"no '{token}' in date '{s}'"
-    assert len(block) == 5,   f"bogus number of elements in date '{s}'"
+    assert len(block) == 5,   f"unexpected number of elements in date '{s}'"
     # block: [token, weekday, day, month, year]
     month = parse_month(block[3])
     year  = int(block[4])
@@ -85,7 +85,7 @@ def _parse_date3_datestr(s: str, token: str) -> str:
 
 def parse_date3(s) -> dict:
     """
-    Parst Anmeldezeitraum-Strings, z. B.:
+    Parses registration period strings, e.g.:
       "Schriftlich, Internet von Mi 22. Mai 2019 bis Sa 25. Mai 2019, Max. TN 15"
       "Internet von Mi 22. Mai 2019 bis Sa 25. Mai 2019"
       "von Mi 1. Jan. 2025 bis So 2. März 2025"
@@ -93,25 +93,25 @@ def parse_date3(s) -> dict:
       "von So 2. Jun. 2019 bis Fr 28. Jun. 2019, Max. TN 6"
       "bis Fr 16. Sept. 2022, Max. TN 8"
 
-    Gibt ein dict mit optionalen Keys 'from' und/oder 'to' zurück.
+    Returns a dict with optional keys 'from' and/or 'to'.
     """
     if s is None:
         return {}
 
     res = {}
 
-    # ", Max. TN …" am Ende abschneiden
+    # Strip ", Max. TN …" from the end
     i = s.find(', Max. TN ')
     if i > 0:
         s = s[:i]
 
-    # "bis …" zuerst verarbeiten (von hinten)
+    # Process "bis …" first (from the right)
     i = s.find('bis ')
     if i >= 0:
         res['to'] = _parse_date3_datestr(s[i:], 'bis')
         s = s[:i]
 
-    # "von …" verarbeiten
+    # Process "von …"
     i = s.find('von ')
     if i >= 0:
         res['from'] = _parse_date3_datestr(s[i:], 'von')
