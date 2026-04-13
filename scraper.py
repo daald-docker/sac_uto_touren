@@ -14,6 +14,7 @@ from urllib.parse import urlparse, parse_qs
 
 import requests
 from bs4 import BeautifulSoup
+from requests import Session
 
 import sacdateparser
 
@@ -110,13 +111,12 @@ def update_row(db: sqlite3.Connection, tour: dict) -> None:
 # HTTP
 # ---------------------------------------------------------------------------
 
-def fetch_page(url: str, retries: int = 3) -> str:
+def fetch_page(url: str, session: requests.Session, retries: int = 3) -> str:
     """Fetches a page and returns the HTML body."""
     attempt=1
     while True:
         try:
-            # TODO use session for request
-            resp = requests.get(url, headers=HEADERS, timeout=30)
+            resp = session.get(url, timeout=30)
             resp.raise_for_status()
             return resp.text
         except requests.RequestException as e:
@@ -133,7 +133,7 @@ def fetch_page(url: str, retries: int = 3) -> str:
 # Detail page
 # ---------------------------------------------------------------------------
 
-def update_detail(db: sqlite3.Connection, tour: dict, retry: int = 1) -> bool:
+def update_detail(db: sqlite3.Connection, tour: dict, session: requests.Session, retry: int = 1) -> bool:
     """
     Fetches the detail page of a tour, extracts all fields,
     and writes the record to the DB.
@@ -141,12 +141,12 @@ def update_detail(db: sqlite3.Connection, tour: dict, retry: int = 1) -> bool:
     """
     global num_tours_done
 
-    body = fetch_page(tour["url"])
+    body = fetch_page(tour["url"], session)
     if body is None:
         print(f"Could not load page: {tour['url']}")
         if retry > 0:
             print("Retrying ...")
-            return update_detail(db, tour, retry - 1)
+            return update_detail(db, tour, session, retry - 1)
         print("Aborting.")
         sys.exit(1)
 
@@ -171,7 +171,7 @@ def update_detail(db: sqlite3.Connection, tour: dict, retry: int = 1) -> bool:
     if load_error:
         if retry > 0:
             print("Retrying ...")
-            return update_detail(db, tour, retry - 1)
+            return update_detail(db, tour, session, retry - 1)
         print("Aborting.")
         sys.exit(1)
 
@@ -206,7 +206,7 @@ def update_detail(db: sqlite3.Connection, tour: dict, retry: int = 1) -> bool:
     if datum.startswith("Do 0."):
         if retry > 0:
             print(f"Retrying due to unexpected start date '{datum}'")
-            return update_detail(db, tour, retry - 1)
+            return update_detail(db, tour, session, retry - 1)
         print(f"Skipping tour with unexpected start date '{datum}': {tour['url']}")
         return False
 
@@ -236,7 +236,7 @@ def update_detail(db: sqlite3.Connection, tour: dict, retry: int = 1) -> bool:
 # Main page (list view) – paginated
 # ---------------------------------------------------------------------------
 
-def load_process_list(db: sqlite3.Connection, offset: int = 0) -> None:
+def load_process_list(db: sqlite3.Connection, session:Session, offset: int = 0) -> None:
     """
     Processes the paginated tour list and fetches the detail page
     for each entry.
@@ -248,7 +248,7 @@ def load_process_list(db: sqlite3.Connection, offset: int = 0) -> None:
         f"?page=touren&year=&typ=&gruppe=&anlasstyp=&suchstring=&offset={offset}"
     )
 
-    body = fetch_page(list_url)
+    body = fetch_page(list_url, session)
 
     print(f"Processing main list {list_url}")
     soup = BeautifulSoup(body, "html.parser")
@@ -320,7 +320,7 @@ def load_process_list(db: sqlite3.Connection, offset: int = 0) -> None:
 
     for t in detail_tours:
         try:
-            update_detail(db, t)
+            update_detail(db, t, session)
             sys.stdout.flush()
         except Exception as exc:
             print(f"Error on tour {t.get('id')}: {exc}")
@@ -328,7 +328,7 @@ def load_process_list(db: sqlite3.Connection, offset: int = 0) -> None:
 
     # Load next page if enough results
     if len(detail_tours) > 40:
-        load_process_list(db, offset + max(len(detail_tours), 40))
+        load_process_list(db, session,offset + max(len(detail_tours), 40))
 
 # ---------------------------------------------------------------------------
 # Entry point
@@ -337,16 +337,19 @@ def load_process_list(db: sqlite3.Connection, offset: int = 0) -> None:
 if __name__ == "__main__":
     args = sys.argv[1:]
 
+    session = requests.Session()
+    session.headers.update(HEADERS)
+
     if args:
         # Process a single tour URL directly (as in the original)
-        update_detail(None, {"url": args[0]})
+        update_detail(None, {"url": args[0]}, session)
     else:
         db = init_database()
 
         # Mark all active records as inactive before re-scraping
         db.execute("UPDATE data SET active=0")
 
-        load_process_list(db)
+        load_process_list(db, session)
 
         # Commit after each page
 
