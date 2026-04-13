@@ -7,8 +7,8 @@ Dependencies:
     pip install requests beautifulsoup4
 """
 
-import sys
 import sqlite3
+import sys
 import time
 from urllib.parse import urlparse, parse_qs
 
@@ -30,6 +30,7 @@ HEADERS = {
         "(KHTML, like Gecko) Chrome/65.0.3325.183 Safari/537.36 Vivaldi/1.96.1147.36"
     )
 }
+
 
 # ---------------------------------------------------------------------------
 # Database
@@ -113,7 +114,7 @@ def update_row(db: sqlite3.Connection, tour: dict) -> None:
 
 def fetch_page(url: str, session: requests.Session, retries: int = 3) -> str:
     """Fetches a page and returns the HTML body."""
-    attempt=1
+    attempt = 1
     while True:
         try:
             resp = session.get(url, timeout=30)
@@ -121,12 +122,11 @@ def fetch_page(url: str, session: requests.Session, retries: int = 3) -> str:
             return resp.text
         except requests.RequestException as e:
             print(f"Error fetching {url} (attempt {attempt}:", e)
-            if attempt<retries:
+            if attempt < retries:
                 time.sleep(2 ** attempt)
-                # TODO reset session
             else:
                 raise e
-            attempt+=1
+            attempt += 1
 
 
 # ---------------------------------------------------------------------------
@@ -236,7 +236,7 @@ def update_detail(db: sqlite3.Connection, tour: dict, session: requests.Session,
 # Main page (list view) – paginated
 # ---------------------------------------------------------------------------
 
-def load_process_list(db: sqlite3.Connection, session:Session, offset: int = 0) -> None:
+def load_process_list(db: sqlite3.Connection, session: Session, offset: int = 0) -> None:
     """
     Processes the paginated tour list and fetches the detail page
     for each entry.
@@ -255,7 +255,7 @@ def load_process_list(db: sqlite3.Connection, session:Session, offset: int = 0) 
 
     rows = soup.select("table.table tr")
 
-    assert  offset > 0 or len(rows)>1,"Empty index page or changed format"
+    assert offset > 0 or len(rows) > 1, "Empty index page or changed format"
 
     detail_tours: list[dict] = []
 
@@ -275,7 +275,7 @@ def load_process_list(db: sqlite3.Connection, session:Session, offset: int = 0) 
 
         # Column 0: date / status
         tour["rawDate"] = first.get_text().strip()
-        classes = first.get("class") # returns a list
+        classes = first.get("class")  # returns a list
         if "status_3" in classes:
             tour["status"] = "full"
         elif "status_2" in classes:
@@ -308,7 +308,7 @@ def load_process_list(db: sqlite3.Connection, session:Session, offset: int = 0) 
         parsed = urlparse(tour["url"])
         qs = parse_qs(parsed.query)
         tour["id"] = qs.get("touren_nummer")[0]
-        assert tour["id"], "No id found in tour url %s"%tour["url"]
+        assert tour["id"], "No id found in tour url %s" % tour["url"]
 
         if len(tds) > 8:
             tour["leiter"] = tds[8].get_text().strip()
@@ -328,7 +328,8 @@ def load_process_list(db: sqlite3.Connection, session:Session, offset: int = 0) 
 
     # Load next page if enough results
     if len(detail_tours) > 40:
-        load_process_list(db, session,offset + max(len(detail_tours), 40))
+        load_process_list(db, session, offset + max(len(detail_tours), 40))
+
 
 # ---------------------------------------------------------------------------
 # Entry point
