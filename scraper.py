@@ -275,7 +275,7 @@ def load_process_list(db: sqlite3.Connection, offset: int = 0) -> None:
 
         # Column 0: date / status
         tour["rawDate"] = first.get_text().strip()
-        classes = first.get("class", "").split(' ')
+        classes = first.get("class") # returns a list
         if "status_3" in classes:
             tour["status"] = "full"
         elif "status_2" in classes:
@@ -307,8 +307,8 @@ def load_process_list(db: sqlite3.Connection, offset: int = 0) -> None:
         # Tour ID from query string
         parsed = urlparse(tour["url"])
         qs = parse_qs(parsed.query)
-        tour["id"] = qs.get("touren_nummer")
-        assert tour["id"], f"No id found in tour url {tour["url"]}"
+        tour["id"] = qs.get("touren_nummer")[0]
+        assert tour["id"], "No id found in tour url %s"%tour["url"]
 
         if len(tds) > 8:
             tour["leiter"] = tds[8].get_text().strip()
@@ -321,8 +321,10 @@ def load_process_list(db: sqlite3.Connection, offset: int = 0) -> None:
     for t in detail_tours:
         try:
             update_detail(db, t)
+            sys.stdout.flush()
         except Exception as exc:
             print(f"Error on tour {t.get('id')}: {exc}")
+            raise exc
 
     # Load next page if enough results
     if len(detail_tours) > 40:
