@@ -328,7 +328,7 @@ def load_process_list(db: sqlite3.Connection, offset: int = 0) -> None:
 
     # Load next page if enough results
     if len(detail_tours) > 40:
-        load_process_list(db, offset + 50)
+        load_process_list(db, offset + max(len(detail_tours), 40))
 
 # ---------------------------------------------------------------------------
 # Entry point
