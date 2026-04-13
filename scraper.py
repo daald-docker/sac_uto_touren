@@ -37,9 +37,11 @@ HEADERS = {
 
 def init_database() -> sqlite3.Connection:
     """Sets up the SQLite database and returns the connection."""
-    db = sqlite3.connect("data.sqlite", check_same_thread=False)
-    cur = db.cursor()
-    cur.execute("""
+    kwargs = {"check_same_thread": False}
+    if sys.version_info >= (3, 12):
+        kwargs["autocommit"] = False
+    db = sqlite3.connect("data.sqlite", **kwargs)
+    db.execute("""
         CREATE TABLE IF NOT EXISTS data (
             id                        INTEGER PRIMARY KEY,
             active                    INTEGER,
@@ -67,14 +69,14 @@ def init_database() -> sqlite3.Connection:
     """)
     # Add extra_info column retroactively if missing (for existing DBs)
     try:
-        cur.execute("ALTER TABLE data ADD COLUMN extra_info TEXT")
+        db.execute("ALTER TABLE data ADD COLUMN extra_info TEXT")
     except sqlite3.OperationalError:
         pass  # Column already exists
 
-    return db, cur
+    return db
 
 
-def update_row(db: sqlite3.Connection | None, tour: dict) -> None:
+def update_row(db: sqlite3.Connection, tour: dict) -> None:
     """Writes a tour record to the database (or prints it to the console)."""
     if db is None:
         print("REC:", tour)
@@ -109,17 +111,23 @@ def update_row(db: sqlite3.Connection | None, tour: dict) -> None:
 # HTTP
 # ---------------------------------------------------------------------------
 
-def fetch_page(url: str, retries: int = 3) -> str | None:
+def fetch_page(url: str, retries: int = 3) -> str:
     """Fetches a page and returns the HTML body."""
-    for attempt in range(retries):
+    attempt=1
+    while True:
         try:
+            # TODO use session for request
             resp = requests.get(url, headers=HEADERS, timeout=30)
             resp.raise_for_status()
             return resp.text
         except requests.RequestException as e:
-            print(f"Error fetching {url} (attempt {attempt + 1}): {e}")
-            time.sleep(2 ** attempt)
-    return None
+            print(f"Error fetching {url} (attempt {attempt}:", e)
+            if attempt<retries:
+                time.sleep(2 ** attempt)
+                # TODO reset session
+            else:
+                raise e
+            attempt+=1
 
 
 # ---------------------------------------------------------------------------
@@ -192,10 +200,8 @@ def update_detail(db: sqlite3.Connection, tour: dict, retry: int = 1) -> bool:
         value = cells[1].get_text().strip()
         kv[key] = value
 
-    if "Datum" not in kv:
-        print("Page dump before error:", body[:500])
-
-    datum = kv.get("Datum", "")
+    assert "Datum" in kv, f"Field 'Datum' not existing. Page: {body[:500]}"
+    datum = kv["Datum"]
 
     # Special case: server error with date "Do 0."
     if datum.startswith("Do 0."):
@@ -209,19 +215,19 @@ def update_detail(db: sqlite3.Connection, tour: dict, retry: int = 1) -> bool:
     tour["date_from"] = dd["from"]
     tour["date_to"] = dd["to"]
 
-    tour["group"] = kv.get("Gruppe", tour.get("group", ""))
-    tour["mtype"] = kv.get("Anlasstyp", "")
-    tour["type_ext"] = kv.get("Typ/Zusatz:", "")
-    tour["level2"] = kv.get("Anforderungen", "")
-    tour["altitude"] = kv.get("Auf-, Abstieg/Marschzeit", "")
-    tour["arrival"] = kv.get("Reiseroute", "")
-    tour["text"] = kv.get("Route / Details", "")
-    tour["extra_info"] = kv.get("Zusatzinfo", "")
-    tour["equipment"] = kv.get("Ausrüstung", "")
+    tour["group"] = kv.get("Gruppe", tour.get("group"))
+    tour["mtype"] = kv.get("Anlasstyp")
+    tour["type_ext"] = kv.get("Typ/Zusatz:")
+    tour["level2"] = kv.get("Anforderungen")
+    tour["altitude"] = kv.get("Auf-, Abstieg/Marschzeit")
+    tour["arrival"] = kv.get("Reiseroute")
+    tour["text"] = kv.get("Route / Details")
+    tour["extra_info"] = kv.get("Zusatzinfo")
+    tour["equipment"] = kv.get("Ausrüstung")
 
-    dd2 = sacdateparser.parse_date3(kv.get("Anmeldung", ""))
-    tour["subscription_period_start"] = dd2["from"]
-    tour["subscription_period_end"] = dd2["to"]
+    dd2 = sacdateparser.parse_anmeldung(kv.get("Anmeldung"))
+    tour["subscription_period_start"] = dd2.get("from")
+    tour["subscription_period_end"] = dd2.get("to")
 
     update_row(db, tour)
     return True
@@ -231,7 +237,7 @@ def update_detail(db: sqlite3.Connection, tour: dict, retry: int = 1) -> bool:
 # Main page (list view) – paginated
 # ---------------------------------------------------------------------------
 
-def run(db: sqlite3.Connection, offset: int = 0) -> None:
+def load_process_list(db: sqlite3.Connection, offset: int = 0) -> None:
     """
     Processes the paginated tour list and fetches the detail page
     for each entry.
@@ -244,18 +250,13 @@ def run(db: sqlite3.Connection, offset: int = 0) -> None:
     )
 
     body = fetch_page(list_url)
-    if body is None:
-        print(f"Could not load main page: {list_url}")
-        sys.exit(1)
 
     print(f"Processing main list {list_url}")
     soup = BeautifulSoup(body, "html.parser")
 
     rows = soup.select("table.table tr")
 
-    if offset == 0 and not rows:
-        print("No data found on index page.")
-        sys.exit(1)
+    assert  offset > 0 or len(rows)>1,"Empty index page or changed format"
 
     detail_tours: list[dict] = []
 
@@ -266,9 +267,7 @@ def run(db: sqlite3.Connection, offset: int = 0) -> None:
         first = cells[0]
 
         # Skip header rows (th) or colspan cells
-        if first.name != "td":
-            continue
-        if first.get("colspan"):
+        if first.name != "td" or first.get("colspan"):
             continue
 
         tour: dict = {}
@@ -277,7 +276,7 @@ def run(db: sqlite3.Connection, offset: int = 0) -> None:
 
         # Column 0: date / status
         tour["rawDate"] = first.get_text().strip()
-        classes = first.get("class", [])
+        classes = first.get("class", "").split(' ')
         if "status_3" in classes:
             tour["status"] = "full"
         elif "status_2" in classes:
@@ -290,8 +289,7 @@ def run(db: sqlite3.Connection, offset: int = 0) -> None:
             tour["status"] = ""
 
         tds = row.find_all("td")
-        if len(tds) < 8:
-            continue
+        assert len(tds) >= 8, "Unexpected number of cells in row: {row!r}"
 
         tour["type"] = tds[1].get_text().strip()
         # tds[2] = icon (skipped)
@@ -303,15 +301,15 @@ def run(db: sqlite3.Connection, offset: int = 0) -> None:
         tour["title"] = title_td.get_text().strip()
 
         link = title_td.find("a")
-        if link:
-            tour["url"] = link.get("href", "")
-        else:
-            tour["url"] = ""
+        assert link
+        tour["url"] = link.get("href")
+        assert tour["url"]
 
         # Tour ID from query string
         parsed = urlparse(tour["url"])
         qs = parse_qs(parsed.query)
-        tour["id"] = qs.get("touren_nummer", [None])[0]
+        tour["id"] = qs.get("touren_nummer")
+        assert tour["id"], f"No id found in tour url {url}"
 
         if len(tds) > 8:
             tour["leiter"] = tds[8].get_text().strip()
@@ -336,7 +334,7 @@ def run(db: sqlite3.Connection, offset: int = 0) -> None:
 
     # Load next page if enough results
     if len(detail_tours) > 40:
-        run(db, offset + 50)
+        load_process_list(db, offset + 50)
 
 # ---------------------------------------------------------------------------
 # Entry point
@@ -349,14 +347,15 @@ if __name__ == "__main__":
         # Process a single tour URL directly (as in the original)
         update_detail(None, {"url": args[0]})
     else:
-        db, cur = init_database()
+        db = init_database()
 
-    # Mark all active records as inactive before re-scraping
-    cur.execute("UPDATE data SET active=0")
+        # Mark all active records as inactive before re-scraping
+        db.execute("UPDATE data SET active=0")
 
-    run(db)
+        load_process_list(db)
 
-    # Commit after each page
-    print("Committing and closing database connection.")
-    db.commit()
-    db.close()
+        # Commit after each page
+
+        print("Committing and closing database connection.")
+        db.commit()
+        db.close()

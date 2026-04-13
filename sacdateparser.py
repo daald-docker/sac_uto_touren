@@ -68,7 +68,7 @@ def parse_date2(s: str) -> dict:
         }
 
 
-def _parse_date3_datestr(s: str, token: str) -> str:
+def parse_anmeldung_datestr(s: str, token: str) -> str:
     """
     Parses a substring of the form "von Mi 22. Mai 2019" or "bis Sa 25. Mai 2019".
     """
@@ -83,7 +83,7 @@ def _parse_date3_datestr(s: str, token: str) -> str:
     return f"{year:04d}-{month:02d}-{day:02d}"
 
 
-def parse_date3(s) -> dict:
+def parse_anmeldung(s) -> dict:
     """
     Parses registration period strings, e.g.:
       "Schriftlich, Internet von Mi 22. Mai 2019 bis Sa 25. Mai 2019, Max. TN 15"
@@ -108,12 +108,14 @@ def parse_date3(s) -> dict:
     # Process "bis …" first (from the right)
     i = s.find('bis ')
     if i >= 0:
-        res['to'] = _parse_date3_datestr(s[i:], 'bis')
+        res['to'] = parse_anmeldung_datestr(s[i:], 'bis')
         s = s[:i]
 
     # Process "von …"
     i = s.find('von ')
     if i >= 0:
-        res['from'] = _parse_date3_datestr(s[i:], 'von')
+        res['from'] = parse_anmeldung_datestr(s[i:], 'von')
+
+    # TODO make sure there's no unhandled extra text in input string
 
     return res
