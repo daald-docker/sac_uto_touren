@@ -11,7 +11,6 @@ import sys
 import sqlite3
 import time
 from urllib.parse import urlparse, parse_qs
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 from bs4 import BeautifulSoup
@@ -37,10 +36,10 @@ HEADERS = {
 
 def init_database() -> sqlite3.Connection:
     """Sets up the SQLite database and returns the connection."""
-    kwargs = {"check_same_thread": False}
     if sys.version_info >= (3, 12):
-        kwargs["autocommit"] = False
-    db = sqlite3.connect("data.sqlite", **kwargs)
+        db = sqlite3.connect("data.sqlite", autocommit=False)
+    else:
+        db = sqlite3.connect("data.sqlite")
     db.execute("""
         CREATE TABLE IF NOT EXISTS data (
             id                        INTEGER PRIMARY KEY,
@@ -309,7 +308,7 @@ def load_process_list(db: sqlite3.Connection, offset: int = 0) -> None:
         parsed = urlparse(tour["url"])
         qs = parse_qs(parsed.query)
         tour["id"] = qs.get("touren_nummer")
-        assert tour["id"], f"No id found in tour url {url}"
+        assert tour["id"], f"No id found in tour url {tour["url"]}"
 
         if len(tds) > 8:
             tour["leiter"] = tds[8].get_text().strip()
@@ -319,18 +318,11 @@ def load_process_list(db: sqlite3.Connection, offset: int = 0) -> None:
         num_tours_total += 1
         detail_tours.append(tour)
 
-    # Fetch detail pages in parallel (max. 2 at a time, as in the original)
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = {
-            executor.submit(update_detail, db, t): t
-            for t in detail_tours
-        }
-        for future in as_completed(futures):
-            try:
-                future.result()
-            except Exception as exc:
-                t = futures[future]
-                print(f"Error on tour {t.get('id')}: {exc}")
+    for t in detail_tours:
+        try:
+            update_detail(db, t)
+        except Exception as exc:
+            print(f"Error on tour {t.get('id')}: {exc}")
 
     # Load next page if enough results
     if len(detail_tours) > 40:
