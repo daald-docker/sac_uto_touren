@@ -7,9 +7,14 @@ Dependencies:
     pip install requests beautifulsoup4
 """
 
+import hashlib
+import math
+import os
+import random
 import sqlite3
 import sys
 import time
+from datetime import date
 from urllib.parse import urlparse, parse_qs
 
 import requests
@@ -33,15 +38,44 @@ HEADERS = {
 
 
 # ---------------------------------------------------------------------------
+# Checksum helpers
+# ---------------------------------------------------------------------------
+
+def compute_checksum(tour: dict) -> str:
+    """Checksum of the fields available on the main listing page."""
+    fields = (
+        tour.get("rawDate", ""),
+        tour.get("status", ""),
+        tour.get("type", ""),
+        tour.get("level", ""),
+        tour.get("rawDuration", ""),
+        tour.get("group", ""),
+        tour.get("title", ""),
+        tour.get("leiter", ""),
+    )
+    return hashlib.md5("\x00".join(fields).encode()).hexdigest()
+
+
+def is_within_3_days(date_str: str | None) -> bool:
+    if not date_str:
+        return False
+    try:
+        return abs((date.fromisoformat(date_str) - date.today()).days) <= 3
+    except ValueError:
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
 
 def init_database() -> sqlite3.Connection:
     """Sets up the SQLite database and returns the connection."""
+    db_path = os.environ.get("SCRAPER_DB_FILE", "data.sqlite")
     if sys.version_info >= (3, 12):
-        db = sqlite3.connect("data.sqlite", autocommit=False)
+        db = sqlite3.connect(db_path, autocommit=False)
     else:
-        db = sqlite3.connect("data.sqlite")
+        db = sqlite3.connect(db_path)
     db.execute("""
         CREATE TABLE IF NOT EXISTS data (
             id                        INTEGER PRIMARY KEY,
@@ -68,20 +102,27 @@ def init_database() -> sqlite3.Connection:
             extra_info                TEXT
         )
     """)
-    # Add extra_info column retroactively if missing (for existing DBs)
-    try:
-        db.execute("ALTER TABLE data ADD COLUMN extra_info TEXT")
-    except sqlite3.OperationalError:
-        pass  # Column already exists
+    for col_def in (
+        "extra_info TEXT",
+        "checksum TEXT",
+        "detail_fetched_at INTEGER",
+    ):
+        try:
+            db.execute(f"ALTER TABLE data ADD COLUMN {col_def}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
 
     return db
 
 
 def update_row(db: sqlite3.Connection, tour: dict) -> None:
-    """Writes a tour record to the database (or prints it to the console)."""
+    """Writes a full tour record to the database (or prints it to the console)."""
     if db is None:
         print("REC:", tour)
         return
+    assert 'id' in tour
+    assert tour['id'] is not None
+    assert isinstance(tour['id'], str)
 
     db.execute("""
         INSERT OR REPLACE INTO data (
@@ -93,7 +134,8 @@ def update_row(db: sqlite3.Connection, tour: dict) -> None:
             arrival, text, extra_info,
             equipment,
             subscription_period_start,
-            subscription_period_end
+            subscription_period_end,
+            checksum, detail_fetched_at
         ) VALUES (
             :id, :active, :lastSeen,
             :date_from, :date_to,
@@ -103,8 +145,27 @@ def update_row(db: sqlite3.Connection, tour: dict) -> None:
             :arrival, :text, :extra_info,
             :equipment,
             :subscription_period_start,
-            :subscription_period_end
+            :subscription_period_end,
+            :checksum, :detail_fetched_at
         )
+    """, tour)
+
+
+def update_listing_only(db: sqlite3.Connection, tour: dict) -> None:
+    """Updates only listing-derived fields for a tour that doesn't need a detail re-fetch."""
+    db.execute("""
+        UPDATE data SET
+            active   = :active,
+            lastSeen = :lastSeen,
+            checksum = :checksum,
+            status   = :status,
+            type     = :type,
+            level    = :level,
+            grp      = :group,
+            title    = :title,
+            leiter   = :leiter,
+            url      = :url
+        WHERE id = :id
     """, tour)
 
 
@@ -141,6 +202,9 @@ def update_detail(db: sqlite3.Connection, tour: dict, session: requests.Session,
     """
     global num_tours_done
 
+    assert 'id' in tour
+    assert tour['id'] is not None
+    assert isinstance(tour['id'], str)
     body = fetch_page(tour["url"], session)
     if body is None:
         print(f"Could not load page: {tour['url']}")
@@ -228,6 +292,7 @@ def update_detail(db: sqlite3.Connection, tour: dict, session: requests.Session,
     tour["subscription_period_start"] = dd2.get("from")
     tour["subscription_period_end"] = dd2.get("to")
 
+    tour["detail_fetched_at"] = int(time.time() * 1000)
     update_row(db, tour)
     return True
 
@@ -236,10 +301,10 @@ def update_detail(db: sqlite3.Connection, tour: dict, session: requests.Session,
 # Main page (list view) – paginated
 # ---------------------------------------------------------------------------
 
-def load_process_list(db: sqlite3.Connection, session: Session, offset: int = 0) -> None:
+def collect_tours(session: Session, offset: int = 0) -> list[dict]:
     """
-    Processes the paginated tour list and fetches the detail page
-    for each entry.
+    Collects all tours from the paginated tour listing and returns them.
+    Does not fetch detail pages.
     """
     global num_tours_total
 
@@ -257,7 +322,7 @@ def load_process_list(db: sqlite3.Connection, session: Session, offset: int = 0)
 
     assert offset > 0 or len(rows) > 1, "Empty index page or changed format"
 
-    detail_tours: list[dict] = []
+    tours: list[dict] = []
 
     for row in rows:
         cells = row.find_all(True, recursive=False)
@@ -275,7 +340,7 @@ def load_process_list(db: sqlite3.Connection, session: Session, offset: int = 0)
 
         # Column 0: date / status
         tour["rawDate"] = first.get_text().strip()
-        classes = first.get("class")  # returns a list
+        classes = first.get("class") or []
         if "status_3" in classes:
             tour["status"] = "full"
         elif "status_2" in classes:
@@ -316,19 +381,12 @@ def load_process_list(db: sqlite3.Connection, session: Session, offset: int = 0)
             tour["leiter"] = ""
 
         num_tours_total += 1
-        detail_tours.append(tour)
+        tours.append(tour)
 
-    for t in detail_tours:
-        try:
-            update_detail(db, t, session)
-            sys.stdout.flush()
-        except Exception as exc:
-            print(f"Error on tour {t.get('id')}: {exc}")
-            raise exc
+    if len(tours) > 40:
+        tours.extend(collect_tours(session, offset + max(len(tours), 40)))
 
-    # Load next page if enough results
-    if len(detail_tours) > 40:
-        load_process_list(db, session, offset + max(len(detail_tours), 40))
+    return tours
 
 
 # ---------------------------------------------------------------------------
@@ -347,12 +405,82 @@ if __name__ == "__main__":
     else:
         db = init_database()
 
+        # Snapshot existing records before resetting active flags so we can
+        # check which tours were previously active when deciding the sample.
+        db_rows = db.execute(
+            "SELECT id, checksum, date_from, date_to, detail_fetched_at, active FROM data"
+        ).fetchall()
+        existing: dict[str, dict] = {
+            str(row[0]): {
+                "checksum": row[1],
+                "date_from": row[2],
+                "date_to": row[3],
+                "detail_fetched_at": row[4],
+                "active": row[5],
+            }
+            for row in db_rows
+        }
+
         # Mark all active records as inactive before re-scraping
         db.execute("UPDATE data SET active=0")
 
-        load_process_list(db, session)
+        all_tours = collect_tours(session)
 
-        # Commit after each page
+        must_fetch: list[dict] = []
+        optional: list[dict] = []
+
+        for tour in all_tours:
+            checksum = compute_checksum(tour)
+            tour["checksum"] = checksum
+            ex = existing.get(tour["id"])
+
+            if (
+                ex is None
+                or ex["checksum"] != checksum
+                or is_within_3_days(ex["date_from"])
+                or is_within_3_days(ex["date_to"])
+            ):
+                must_fetch.append(tour)
+            else:
+                optional.append(tour)
+
+        # Only sample from tours that were previously active.
+        previously_active = [t for t in optional if existing[t["id"]]["active"] == 1]
+
+        # Split into never-fetched (detail_fetched_at absent) and already-fetched.
+        never_fetched = [t for t in previously_active if not existing[t["id"]]["detail_fetched_at"]]
+        already_fetched = [t for t in previously_active if existing[t["id"]]["detail_fetched_at"]]
+
+        # 5% oldest already-fetched (min 10) + 5% random never-fetched.
+        already_fetched.sort(key=lambda t: existing[t["id"]]["detail_fetched_at"])
+        oldest_n = max(10, math.ceil(len(already_fetched) * 0.05))
+        to_fetch_oldest = already_fetched[:oldest_n]
+
+        random_n = math.ceil(len(never_fetched) * 0.05)
+        to_fetch_random = random.sample(never_fetched, min(random_n, len(never_fetched)))
+
+        to_fetch_optional = to_fetch_oldest + to_fetch_random
+        sampled_ids = {t["id"] for t in to_fetch_optional}
+        skip_fetch = [t for t in optional if t["id"] not in sampled_ids]
+
+        num_tours_total = len(must_fetch) + len(to_fetch_optional)
+        print(
+            f"Tours: {len(all_tours)} total, {len(must_fetch)} must-fetch, "
+            f"{len(to_fetch_oldest)}/{len(already_fetched)} oldest + "
+            f"{len(to_fetch_random)}/{len(never_fetched)} random never-fetched, "
+            f"{len(skip_fetch)} listing-only"
+        )
+
+        for tour in must_fetch + to_fetch_optional:
+            try:
+                update_detail(db, tour, session)
+                sys.stdout.flush()
+            except Exception as exc:
+                print(f"Error on tour {tour.get('id')}: {exc}")
+                raise exc
+
+        for tour in skip_fetch:
+            update_listing_only(db, tour)
 
         print("Committing and closing database connection.")
         db.commit()
