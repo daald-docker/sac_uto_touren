@@ -496,6 +496,13 @@ if __name__ == "__main__":
         for tour in skip_fetch:
             update_listing_only(db, tour)
 
+        total = db.execute("SELECT COUNT(*), MIN(date_from), MAX(date_from) FROM data").fetchone()
+        active = db.execute("SELECT COUNT(*), MIN(date_from), MAX(date_from) FROM data WHERE active=1").fetchone()
+        print(
+            f"DB: {total[0]} total ({total[1]} – {total[2]}), "
+            f"{active[0]} active ({active[1]} – {active[2]})"
+        )
+
         print("Committing and closing database connection.")
         db.commit()
         db.close()
