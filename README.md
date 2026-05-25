@@ -24,17 +24,7 @@ I migrated it now to python. Thanks to Claude AI.
 
 ## Requirements
 
-Python 3.10+ and the following packages:
-
-```bash
-pip install -r requirements.txt
-```
-
-For tests (optional):
-
-```bash
-pip install pytest
-```
+[uv](https://docs.astral.sh/uv/) — dependencies are declared in `pyproject.toml` and locked in `uv.lock`.
 
 ---
 
@@ -43,18 +33,27 @@ pip install pytest
 ### Scrape all tours
 
 ```bash
-python scraper.py
+uv run scraper.py
 ```
 
-The scraper automatically paginates through all available tours and writes the
-results to `data.sqlite` in the current directory.
+The scraper paginates through all available tours. Tours whose listing data changed
+or whose date is within 3 days are always re-fetched. For the rest, a sample of
+detail pages is refreshed: by default 5% of the oldest already-fetched tours and
+5% of random not-yet-fetched tours (10% total).
+
+```bash
+uv run scraper.py -p 20   # use 20% total (10% oldest + 10% random)
+uv run scraper.py -a      # fetch detail pages for all optional tours
+```
+
+Results are written to `data.sqlite` in the current directory.
 
 ### Process a single tour URL directly
 
 Useful for testing or debugging a specific tour:
 
 ```bash
-python scraper.py "https://sac-uto.ch/de/aktivitaeten/touren-und-kurse/.html?page=detail&touren_nummer=5947"
+uv run scraper.py "https://sac-uto.ch/de/aktivitaeten/touren-und-kurse/.html?page=detail&touren_nummer=5947"
 ```
 
 In single-tour mode no database writes are performed – data is printed to stdout.
@@ -64,11 +63,7 @@ In single-tour mode no database writes are performed – data is printed to stdo
 ## Tests
 
 ```bash
-# with pytest
-pytest test_sacdateparser.py -v
-
-# or with the Python standard library only
-python -m unittest test_sacdateparser -v
+uv run pytest test_sacdateparser.py -v
 ```
 
 ---
@@ -107,7 +102,4 @@ Results are written to `data.sqlite`, table `data`:
 - The scraper automatically retries on HTTP errors (5xx) with exponential backoff.
 - Tours with a clearly malformed date (`Do 0. …`) are skipped or retried – this is a
   known server-side race condition on the source website.
-- At most 2 detail pages are fetched concurrently to avoid hammering the server.
-- Currently, the default process is to download all pages, even unchanged. The plan is to implement
-  a pre-condition based on the overview list to avoid unnecessary reload of everything. For this, the
-  python migration was the preparation step.
+- Detail pages are fetched sequentially to avoid hammering the server.

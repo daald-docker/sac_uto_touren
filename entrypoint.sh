@@ -1,5 +1,7 @@
 #!/bin/sh
 
+cd /app
+
 if [ -f /data/data.sqlite ]; then
     cp /data/data.sqlite /tmp/data.sqlite
 fi

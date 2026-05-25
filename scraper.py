@@ -7,6 +7,7 @@ Dependencies:
     pip install requests beautifulsoup4
 """
 
+import argparse
 import hashlib
 import math
 import os
@@ -394,14 +395,18 @@ def collect_tours(session: Session, offset: int = 0) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    args = sys.argv[1:]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("url", nargs="?", help="Fetch a single tour URL directly")
+    parser.add_argument("-a", action="store_true", help="Fetch all optional tours")
+    parser.add_argument("-p", type=float, default=10.0, metavar="PCT",
+                        help="Total sampling percentage split half-half between oldest and random (default: 10)")
+    parsed = parser.parse_args()
 
     session = requests.Session()
     session.headers.update(HEADERS)
 
-    if args:
-        # Process a single tour URL directly (as in the original)
-        update_detail(None, {"url": args[0]}, session)
+    if parsed.url:
+        update_detail(None, {"url": parsed.url}, session)
     else:
         db = init_database()
 
@@ -444,33 +449,42 @@ if __name__ == "__main__":
             else:
                 optional.append(tour)
 
-        # Only sample from tours that were previously active.
-        previously_active = [t for t in optional if existing[t["id"]]["active"] == 1]
+        if parsed.a:
+            to_fetch_optional = optional
+            skip_fetch = []
+            print(
+                f"Tours: {len(all_tours)} total, {len(must_fetch)} must-fetch, "
+                f"{len(to_fetch_optional)} all-optional, 0 listing-only"
+            )
+        else:
+            half = parsed.p / 2 / 100
 
-        # Split into never-fetched (detail_fetched_at absent) and already-fetched.
-        never_fetched = [t for t in previously_active if not existing[t["id"]]["detail_fetched_at"]]
-        already_fetched = [t for t in previously_active if existing[t["id"]]["detail_fetched_at"]]
+            # Only sample from tours that were previously active.
+            previously_active = [t for t in optional if existing[t["id"]]["active"] == 1]
 
-        # 5% oldest already-fetched (min 10) + 5% random never-fetched.
-        already_fetched.sort(key=lambda t: existing[t["id"]]["detail_fetched_at"])
-        oldest_n = max(10, math.ceil(len(already_fetched) * 0.05))
-        to_fetch_oldest = already_fetched[:oldest_n]
+            # half% oldest already-fetched (min 10) + half% random not-yet-fetched.
+            already_fetched = [t for t in previously_active if existing[t["id"]]["detail_fetched_at"]]
+            already_fetched.sort(key=lambda t: existing[t["id"]]["detail_fetched_at"])
+            oldest_n = max(10, math.ceil(len(already_fetched) * half))
+            to_fetch_oldest = already_fetched[:oldest_n]
 
-        random_n = math.ceil(len(never_fetched) * 0.05)
-        to_fetch_random = random.sample(never_fetched, min(random_n, len(never_fetched)))
+            oldest_ids = {t["id"] for t in to_fetch_oldest}
+            not_yet_fetched = [t for t in previously_active if t["id"] not in oldest_ids]
+            random_n = math.ceil(len(not_yet_fetched) * half)
+            to_fetch_random = random.sample(not_yet_fetched, min(random_n, len(not_yet_fetched)))
 
-        to_fetch_optional = to_fetch_oldest + to_fetch_random
-        sampled_ids = {t["id"] for t in to_fetch_optional}
-        skip_fetch = [t for t in optional if t["id"] not in sampled_ids]
+            to_fetch_optional = to_fetch_oldest + to_fetch_random
+            sampled_ids = {t["id"] for t in to_fetch_optional}
+            skip_fetch = [t for t in optional if t["id"] not in sampled_ids]
+
+            print(
+                f"Tours: {len(all_tours)} total, {len(must_fetch)} must-fetch, "
+                f"{len(to_fetch_oldest)}/{len(already_fetched)} oldest + "
+                f"{len(to_fetch_random)}/{len(not_yet_fetched)} random not-yet-fetched, "
+                f"{len(skip_fetch)} listing-only"
+            )
 
         num_tours_total = len(must_fetch) + len(to_fetch_optional)
-        print(
-            f"Tours: {len(all_tours)} total, {len(must_fetch)} must-fetch, "
-            f"{len(to_fetch_oldest)}/{len(already_fetched)} oldest + "
-            f"{len(to_fetch_random)}/{len(never_fetched)} random never-fetched, "
-            f"{len(skip_fetch)} listing-only"
-        )
-
         for tour in must_fetch + to_fetch_optional:
             try:
                 update_detail(db, tour, session)

@@ -5,3 +5,6 @@ description = "Scraper for sac-uto.ch tours, initially for morph.io"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = ["beautifulsoup4<4.11","requests"]
+
+[dependency-groups]
+dev = ["pytest"]
