@@ -19,6 +19,8 @@ I migrated it now to python. Thanks to Claude AI.
 | `scraper.py`            | Main script – fetches tour list and detail pages, writes to SQLite |
 | `sacdateparser.py`      | Helper functions for parsing German-language date strings          |
 | `test_sacdateparser.py` | Unit tests for the date parser                                     |
+| `entrypoint.sh`         | Docker entrypoint – copies DB in/out of `/data/` volume           |
+| `Dockerfile`            | Python 3.12 + uv image, runs as non-root `ubuntu` (uid 1000)      |
 
 ---
 
@@ -38,15 +40,16 @@ uv run scraper.py
 
 The scraper paginates through all available tours. Tours whose listing data changed
 or whose date is within 3 days are always re-fetched. For the rest, a sample of
-detail pages is refreshed: by default 5% of the oldest already-fetched tours and
-5% of random not-yet-fetched tours (10% total).
+detail pages is refreshed: 5% of the oldest already-fetched tours (min 10) and
+5% of random never-fetched tours — only from tours that were active in the previous run.
 
 ```bash
-uv run scraper.py -p 20   # use 20% total (10% oldest + 10% random)
+uv run scraper.py -p 20   # use 20% total (10% oldest + 10% random never-fetched)
 uv run scraper.py -a      # fetch detail pages for all optional tours
 ```
 
-Results are written to `data.sqlite` in the current directory.
+Results are written to `data.sqlite` in the current directory (override with
+`SCRAPER_DB_FILE=/path/to/file.sqlite`).
 
 ### Process a single tour URL directly
 
@@ -93,7 +96,10 @@ Results are written to `data.sqlite`, table `data`:
 | `text`                                                  | Route / detailed description                                         |
 | `extra_info`                                            | Additional information                                               |
 | `equipment`                                             | Required equipment                                                   |
+| `sleeping`                                              | Accommodation / catering (Unterkunft / Verpflegung)                  |
 | `subscription_period_start` / `subscription_period_end` | Registration period (ISO 8601)                                       |
+| `checksum`                                              | MD5 of listing fields; change triggers a detail re-fetch             |
+| `detail_fetched_at`                                     | Unix timestamp (ms) of the last detail page fetch                    |
 
 ---
 

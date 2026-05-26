@@ -107,6 +107,7 @@ def init_database() -> sqlite3.Connection:
         "extra_info TEXT",
         "checksum TEXT",
         "detail_fetched_at INTEGER",
+        "sleeping TEXT",
     ):
         try:
             db.execute(f"ALTER TABLE data ADD COLUMN {col_def}")
@@ -119,7 +120,9 @@ def init_database() -> sqlite3.Connection:
 def update_row(db: sqlite3.Connection, tour: dict) -> None:
     """Writes a full tour record to the database (or prints it to the console)."""
     if db is None:
-        print("REC:", tour)
+        width = max(len(k) for k in tour)
+        for k, v in tour.items():
+            print(f"  {k:<{width}}  {v!r}")
         return
     assert 'id' in tour
     assert tour['id'] is not None
@@ -133,7 +136,7 @@ def update_row(db: sqlite3.Connection, tour: dict) -> None:
             title, leiter, url,
             altitude, mtype, type_ext, level2,
             arrival, text, extra_info,
-            equipment,
+            equipment, sleeping,
             subscription_period_start,
             subscription_period_end,
             checksum, detail_fetched_at
@@ -144,7 +147,7 @@ def update_row(db: sqlite3.Connection, tour: dict) -> None:
             :title, :leiter, :url,
             :altitude, :mtype, :type_ext, :level2,
             :arrival, :text, :extra_info,
-            :equipment,
+            :equipment, :sleeping,
             :subscription_period_start,
             :subscription_period_end,
             :checksum, :detail_fetched_at
@@ -249,8 +252,9 @@ def update_detail(db: sqlite3.Connection, tour: dict, session: requests.Session,
     # Title and leader
     h2 = soup.find("h2")
     tour["title"] = h2.get_text().strip() if h2 else tour.get("title", "")
-    leiter_el = soup.select_one(".droptours-address-name")
-    tour["leiter"] = leiter_el.get_text().strip() if leiter_el else ""
+    tour["leiter"] = ", ".join(
+        el.get_text().strip() for el in soup.select(".droptours-address-name")
+    )
 
     # Key-value table
     kv: dict[str, str] = {}
@@ -279,19 +283,39 @@ def update_detail(db: sqlite3.Connection, tour: dict, session: requests.Session,
     tour["date_from"] = dd["from"]
     tour["date_to"] = dd["to"]
 
-    tour["group"] = kv.get("Gruppe", tour.get("group"))
-    tour["mtype"] = kv.get("Anlasstyp")
-    tour["type_ext"] = kv.get("Typ/Zusatz:")
-    tour["level2"] = kv.get("Anforderungen")
-    tour["altitude"] = kv.get("Auf-, Abstieg/Marschzeit")
-    tour["arrival"] = kv.get("Reiseroute")
-    tour["text"] = kv.get("Route / Details")
-    tour["extra_info"] = kv.get("Zusatzinfo")
-    tour["equipment"] = kv.get("Ausrüstung")
+    kv.pop("Datum")
+    tour["group"] = kv.pop("Gruppe", tour.get("group"))
+    tour["mtype"] = kv.pop("Anlasstyp", None)
+    tour["type_ext"] = kv.pop("Typ/Zusatz:", None)
+    tour["level2"] = kv.pop("Anforderungen", None)
+    tour["altitude"] = kv.pop("Auf-, Abstieg/Marschzeit", None) or kv.pop("Auf-, Abstieg / Zeit", None)
+    tour["arrival"] = kv.pop("Reiseroute", None)
+    tour["text"] = kv.pop("Route / Details", None)
+    tour["extra_info"] = kv.pop("Zusatzinfo", None)
+    tour["equipment"] = kv.pop("Ausrüstung", None)
+    tour["sleeping"] = kv.pop("Unterkunft / Verpflegung", None)
 
-    dd2 = sacdateparser.parse_anmeldung(kv.get("Anmeldung"))
+    dd2 = sacdateparser.parse_anmeldung(kv.pop("Anmeldung", None))
     tour["subscription_period_start"] = dd2.get("from")
     tour["subscription_period_end"] = dd2.get("to")
+
+    _IGNORED_KEYS = {
+        # 'Tourenleiter*' matched by prefix below (there might be multiple)
+        "Kosten",                # e.g. 'öV, 5.- Tourenfünfliber'
+        "Besprechung",           # e.g. 'E-Mail'
+        "Treffpunkt",            # e.g. '18:30 Uhr / Clublokal SAC-Uto, Stampfenbachstrasse 57, 8006 Zü'
+        "Route",                 # e.g. 'Balmflue Südgrat'
+        "Durchführungskontakt",  # e.g. 'Tourenleiter'
+        "Clubführer",            # e.g. 'Kletterführer Graubünden'
+        "Karten",                # e.g. '235'
+        "Ausweichdatum",         # e.g. 'Fr 12. Jun. 2026'
+        "Bergführer",            # e.g. 'Hans Muster'
+        "Beschreibung",          # e.g. 'Wandern-und-Yoga_Details_2026.pdf'
+    }
+    for key, value in kv.items():
+        if not key or key.startswith("Tourenleiter") or key in _IGNORED_KEYS:
+            continue
+        print(f"UNPROCESSED detail field on tour {tour.get('id')}: {key!r} = {value!r}")
 
     tour["detail_fetched_at"] = int(time.time() * 1000)
     update_row(db, tour)
@@ -394,6 +418,14 @@ def collect_tours(session: Session, offset: int = 0) -> list[dict]:
 # Entry point
 # ---------------------------------------------------------------------------
 
+def testcall(url: str, session: requests.Session) -> None:
+    """Fetches a single tour detail page and prints the result; no DB writes."""
+    parsed = urlparse(url)
+    qs = parse_qs(parsed.query)
+    tour_id = (qs.get("touren_nummer") or [None])[0]
+    update_detail(None, {"url": url, "id": tour_id}, session)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("url", nargs="?", help="Fetch a single tour URL directly")
@@ -406,7 +438,7 @@ if __name__ == "__main__":
     session.headers.update(HEADERS)
 
     if parsed.url:
-        update_detail(None, {"url": parsed.url}, session)
+        testcall(parsed.url, session)
     else:
         db = init_database()
 

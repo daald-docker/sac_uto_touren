@@ -3,13 +3,13 @@
 ## Commands
 
 ```bash
-# Run scraper (normal mode, 10% sampling)
+# Run scraper (default: 5% oldest + 5% random sampling)
 uv run scraper.py
 
-# Run scraper – fetch all optional tours
+# Fetch all optional tours (no sampling)
 uv run scraper.py -a
 
-# Run scraper – custom sampling percentage
+# Custom sampling percentage (total, split half-half)
 uv run scraper.py -p 20
 
 # Fetch a single tour detail page (no DB writes, prints to stdout)
@@ -29,17 +29,16 @@ docker run --rm -v "$(pwd)/data:/data" sac-uto-scraper
 
 **Two-phase scrape:** `collect_tours()` paginates the listing page to get all tours (lightweight), then detail pages are fetched selectively.
 
-**Sampling strategy** (normal mode):
+**Sampling strategy:**
 
 Tours are split into:
-- `must_fetch` – new tours, checksum changed, or date within 3 days
-- `optional` – previously active, unchanged
+- `must_fetch` – new tours (no DB record), listing checksum changed, or either date within 3 days
+- `optional` – unchanged tours; only those previously marked `active=1` are sampled:
+  - **Oldest already-fetched:** oldest `p/2`% (min 10) sorted by `detail_fetched_at` — gradual refresh of stale detail data
+  - **Random never-fetched:** random `p/2`% from tours with no `detail_fetched_at` — picks up tours whose details were never loaded
+- All remaining tours get their listing fields updated without a detail fetch
 
-From `optional`, only tours previously marked `active=1` are sampled:
-- **Oldest already-fetched:** oldest `p/2`% (min 10) sorted by `detail_fetched_at` — ensures gradual refresh of stale detail data
-- **Random not-yet-fetched:** random `p/2`% from the remaining — picks up tours whose details were never loaded
-
-`-a` bypasses sampling and fetches all optional tours.
+`-a` bypasses sampling and fetches all optional tours. `-p` sets the total percentage (default: 10).
 
 **DB persistence in Docker:** `entrypoint.sh` copies `/data/data.sqlite` → `/tmp/data.sqlite` before the run, writes back on success. The DB path is set via `SCRAPER_DB_FILE` (default: `data.sqlite`).
 
