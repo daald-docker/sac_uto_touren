@@ -32,7 +32,7 @@ docker run --rm -v "$(pwd)/data:/data" sac-uto-scraper
 **Sampling strategy:**
 
 Tours are split into:
-- `must_fetch` – new tours (no DB record), listing checksum changed, or either date within 3 days
+- `must_fetch` – new tours (no DB record), listing checksum changed, either tour date within 3 days, or subscription period active (from 5 days before start through 3 days after end)
 - `optional` – unchanged tours; only those previously marked `active=1` are sampled:
   - **Oldest already-fetched:** oldest `p/2`% (min 10) sorted by `detail_fetched_at` — gradual refresh of stale detail data
   - **Random never-fetched:** random `p/2`% from tours with no `detail_fetched_at` — picks up tours whose details were never loaded

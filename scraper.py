@@ -15,7 +15,7 @@ import random
 import sqlite3
 import sys
 import time
-from datetime import date
+from datetime import date, timedelta
 from urllib.parse import urlparse, parse_qs
 
 import requests
@@ -62,6 +62,16 @@ def is_within_3_days(date_str: str | None) -> bool:
         return False
     try:
         return abs((date.fromisoformat(date_str) - date.today()).days) <= 3
+    except ValueError:
+        return False
+
+
+def is_subscription_period_active(start: str | None, end: str | None) -> bool:
+    today = date.today()
+    try:
+        after_start = today >= date.fromisoformat(start) - timedelta(days=5) if start else True
+        before_end = today <= date.fromisoformat(end) + timedelta(days=3) if end else True
+        return (start or end) and after_start and before_end
     except ValueError:
         return False
 
@@ -445,7 +455,8 @@ if __name__ == "__main__":
         # Snapshot existing records before resetting active flags so we can
         # check which tours were previously active when deciding the sample.
         db_rows = db.execute(
-            "SELECT id, checksum, date_from, date_to, detail_fetched_at, active FROM data"
+            "SELECT id, checksum, date_from, date_to, detail_fetched_at, active,"
+            " subscription_period_start, subscription_period_end FROM data"
         ).fetchall()
         existing: dict[str, dict] = {
             str(row[0]): {
@@ -454,6 +465,8 @@ if __name__ == "__main__":
                 "date_to": row[3],
                 "detail_fetched_at": row[4],
                 "active": row[5],
+                "subscription_period_start": row[6],
+                "subscription_period_end": row[7],
             }
             for row in db_rows
         }
@@ -476,6 +489,7 @@ if __name__ == "__main__":
                 or ex["checksum"] != checksum
                 or is_within_3_days(ex["date_from"])
                 or is_within_3_days(ex["date_to"])
+                or is_subscription_period_active(ex["subscription_period_start"], ex["subscription_period_end"])
             ):
                 must_fetch.append(tour)
             else:
