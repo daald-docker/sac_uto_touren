@@ -336,7 +336,12 @@ def update_detail(db: sqlite3.Connection, tour: dict, session: requests.Session,
 # Main page (list view) – paginated
 # ---------------------------------------------------------------------------
 
-def collect_tours(session: Session, offset: int = 0) -> list[dict]:
+def _td(row, cls: str) -> str:
+    el = row.find("td", class_=cls)
+    return el.get_text().strip() if el else ""
+
+
+def collect_tours(session: Session, offset: int = 0, max_pages: int | None = None) -> list[dict]:
     """
     Collects all tours from the paginated tour listing and returns them.
     Does not fetch detail pages.
@@ -373,7 +378,7 @@ def collect_tours(session: Session, offset: int = 0) -> list[dict]:
         tour["active"] = 1
         tour["lastSeen"] = int(time.time() * 1000)
 
-        # Column 0: date / status
+        # First cell: date + status (no dedicated class for date)
         tour["rawDate"] = first.get_text().strip()
         classes = first.get("class") or []
         if "status_3" in classes:
@@ -387,16 +392,13 @@ def collect_tours(session: Session, offset: int = 0) -> list[dict]:
         else:
             tour["status"] = ""
 
-        tds = row.find_all("td")
-        assert len(tds) >= 8, "Unexpected number of cells in row: {row!r}"
+        tour["type"] = _td(row, "droptours-typ")
+        tour["level"] = _td(row, "droptours-anforderungen")
+        tour["rawDuration"] = _td(row, "droptours-dauer")
+        tour["group"] = _td(row, "droptours-gruppe")
 
-        tour["type"] = tds[1].get_text().strip()
-        # tds[2] = icon (skipped)
-        tour["level"] = tds[3].get_text().strip()
-        tour["rawDuration"] = tds[4].get_text().strip()
-        tour["group"] = tds[5].get_text().strip()
-        # tds[6] = ? (skipped)
-        title_td = tds[7]
+        title_td = row.find("td", class_="dropapp-tours-title")
+        assert title_td, f"No title cell in row: {row!r}"
         tour["title"] = title_td.get_text().strip()
 
         link = title_td.find("a")
@@ -410,16 +412,17 @@ def collect_tours(session: Session, offset: int = 0) -> list[dict]:
         tour["id"] = qs.get("touren_nummer")[0]
         assert tour["id"], "No id found in tour url %s" % tour["url"]
 
-        if len(tds) > 8:
-            tour["leiter"] = tds[8].get_text().strip()
-        else:
-            tour["leiter"] = ""
+        tour["leiter"] = _td(row, "droptours-leitung")
 
         num_tours_total += 1
         tours.append(tour)
 
-    if len(tours) > 40:
-        tours.extend(collect_tours(session, offset + max(len(tours), 40)))
+    if len(tours) > 40 and (max_pages is None or max_pages > 1):
+        tours.extend(collect_tours(
+            session,
+            offset + max(len(tours), 40),
+            None if max_pages is None else max_pages - 1,
+        ))
 
     return tours
 
@@ -442,12 +445,19 @@ if __name__ == "__main__":
     parser.add_argument("-a", action="store_true", help="Fetch all optional tours")
     parser.add_argument("-p", type=float, default=10.0, metavar="PCT",
                         help="Total sampling percentage split half-half between oldest and random (default: 10)")
+    parser.add_argument("--dump-mastertable", action="store_true",
+                        help="Fetch first 3 listing pages and print all tours; no DB interaction")
     parsed = parser.parse_args()
 
     session = requests.Session()
     session.headers.update(HEADERS)
 
-    if parsed.url:
+    if parsed.dump_mastertable:
+        tours = collect_tours(session, max_pages=3)
+        for t in tours:
+            print(t)
+        print(f"\n{len(tours)} tours across 3 pages")
+    elif parsed.url:
         testcall(parsed.url, session)
     else:
         db = init_database()
