@@ -15,6 +15,9 @@ uv run scraper.py -p 20
 # Fetch a single tour detail page (no DB writes, prints to stdout)
 uv run scraper.py "https://sac-uto.ch/...?page=detail&touren_nummer=1234"
 
+# Dump first 3 listing pages to stdout (no DB interaction)
+uv run scraper.py --dump-mastertable
+
 # Run tests
 uv run pytest test_sacdateparser.py -v
 
@@ -27,7 +30,7 @@ docker run --rm -v "$(pwd)/data:/data" sac-uto-scraper
 
 ## Architecture
 
-**Two-phase scrape:** `collect_tours()` paginates the listing page to get all tours (lightweight), then detail pages are fetched selectively.
+**Two-phase scrape:** `collect_tours()` paginates the listing page to get all tours (lightweight), then detail pages are fetched selectively. The listing parser uses CSS class selectors (`droptours-*`) rather than positional column indices.
 
 **Sampling strategy:**
 
