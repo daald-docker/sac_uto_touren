@@ -3,11 +3,10 @@
 A scraper for the tour list of [SAC Section Uto](https://sac-uto.ch/de/aktivitaeten/touren-und-kurse/).
 Scraped data is stored in a local SQLite database.
 
-> The original website is awful when you're trying to decide which tours to sign up for
-> and when the registration deadlines are. This scraper makes the data machine-readable.
+Write your own tool for selecting tours if you don't like the original page.
 
 This is a Python port of the original Node.js scraper at
-[daald-docker/sac_uto_touren](https://github.com/daald-docker/sac_uto_touren). For maintainability,
+[daald-docker/sac_uto_touren, branch nodejs](https://github.com/daald-docker/sac_uto_touren/tree/nodejs). For maintainability,
 I migrated it now to python. Thanks to Claude AI.
 
 ---
