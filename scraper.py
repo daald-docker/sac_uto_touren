@@ -464,11 +464,6 @@ if __name__ == "__main__":
 
         # Snapshot existing records before resetting active flags so we can
         # check which tours were previously active when deciding the sample.
-        # WORKAROUND: force detail re-fetch for active rows with empty leiter.
-        # Remove once all rows have been backfilled.
-        db.execute("UPDATE data SET checksum = NULL WHERE active = 1 AND (leiter IS NULL OR leiter = '')")
-        # END WORKAROUND
-
         db_rows = db.execute(
             "SELECT id, checksum, date_from, date_to, detail_fetched_at, active,"
             " subscription_period_start, subscription_period_end FROM data"
